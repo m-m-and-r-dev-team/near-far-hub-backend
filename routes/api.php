@@ -12,7 +12,7 @@ Route::get('/health', function () {
     return response()->json([
         'status' => 'ok',
         'timestamp' => now(),
-        'service' => 'tire-management-api',
+        'service' => 'api',
         'laravel_version' => app()->version()
     ]);
 });
