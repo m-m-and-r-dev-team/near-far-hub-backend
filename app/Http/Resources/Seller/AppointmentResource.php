@@ -6,11 +6,14 @@ namespace App\Http\Resources\Seller;
 
 use App\Http\Resources\Users\UserResource;
 use App\Models\SellerAppointments\SellerAppointment;
+use App\Services\Traits\Resources\HasConditionalFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class AppointmentResource extends JsonResource
 {
+    use HasConditionalFields;
+
     /**
      * @var SellerAppointment $resource
      */

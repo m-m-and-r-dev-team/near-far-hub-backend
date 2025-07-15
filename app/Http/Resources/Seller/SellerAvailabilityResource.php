@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Resources\Seller;
 
 use App\Models\SellerAvailabilities\SellerAvailability;
+use App\Services\Traits\Resources\HasConditionalFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class SellerAvailabilityResource extends JsonResource
 {
+    use HasConditionalFields;
+
     /**
      * @var SellerAvailability $resource
      */

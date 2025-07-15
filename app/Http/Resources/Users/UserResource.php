@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Resources\Users;
 
 use App\Models\User;
+use App\Services\Traits\Resources\HasConditionalFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class UserResource extends JsonResource
 {
+    use HasConditionalFields;
+
     /**
      * @var User $resource
      */
@@ -23,10 +26,13 @@ class UserResource extends JsonResource
         'updatedAt' => User::UPDATED_AT,
     ];
 
-    protected function getData(Request $request): array
+    public function toArray(Request $request): array
     {
         return [
             'id' => $this->resource->getId(),
+            'isSeller' => $this->resource->isSeller(),
+            'isVerifiedSeller' => $this->resource->isVerifiedSeller(),
+            'hasActiveSellerAccount' => $this->resource->hasActiveSellerAccount(),
         ];
     }
 }
