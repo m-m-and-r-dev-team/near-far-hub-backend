@@ -114,7 +114,7 @@ class SellerProfile extends Model
             ->first();
     }
 
-    public function relatedUser(): User
+    public function relatedUser(): ?User
     {
         return $this->{self::USER_RELATION};
     }

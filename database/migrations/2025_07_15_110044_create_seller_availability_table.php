@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('seller_availability', function (Blueprint $table) {
+        Schema::create('seller_availabilities', function (Blueprint $table) {
             $table->id();
             $table->foreignId('seller_profile_id')->constrained()->onDelete('cascade');
             $table->enum('day_of_week', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']);
@@ -23,6 +23,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('seller_availability');
+        Schema::dropIfExists('seller_availabilities');
     }
 };
