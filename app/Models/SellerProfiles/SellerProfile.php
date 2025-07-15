@@ -177,4 +177,9 @@ class SellerProfile extends Model
     {
         return $this->getAttribute(self::ID);
     }
+
+    public function getListingFeeBalance(): float
+    {
+        return $this->getAttribute(self::LISTING_FEE_BALANCE);
+    }
 }

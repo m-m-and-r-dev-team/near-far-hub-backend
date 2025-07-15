@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models\SellerAvailabilities;
 
 use App\Models\SellerProfiles\SellerProfile;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -52,5 +53,15 @@ class SellerAvailability extends Model
     public function getId(): int
     {
         return $this->getAttribute(self::ID);
+    }
+
+    public function getStartTime(): Carbon
+    {
+        return $this->getAttribute(self::START_TIME);
+    }
+
+    public function getEndTime(): Carbon
+    {
+        return $this->getAttribute(self::END_TIME);
     }
 }

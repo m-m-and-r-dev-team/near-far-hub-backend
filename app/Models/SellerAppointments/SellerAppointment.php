@@ -101,4 +101,14 @@ class SellerAppointment extends Model
     {
         return $this->getAttribute(self::ID);
     }
+
+    public function getSellerProfileId(): int
+    {
+        return $this->getAttribute(self::SELLER_PROFILE_ID);
+    }
+
+    public function getBuyerId(): int
+    {
+        return $this->getAttribute(self::BUYER_ID);
+    }
 }
