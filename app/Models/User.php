@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\SellerAppointments\SellerAppointment;
+use App\Models\SellerProfiles\SellerProfile;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
@@ -44,6 +48,11 @@ class User extends Authenticatable
         self::REMEMBER_TOKEN,
     ];
 
+    /** @see User::sellerProfileRelation() */
+    const SELLER_PROFILE_RELATION = 'sellerProfileRelation';
+    /** @see User::buyerAppointmentsRelation() */
+    const BUYER_APPOINTMENTS_RELATION = 'buyerAppointmentsRelation';
+
     /**
      * Get the attributes that should be cast.
      *
@@ -75,5 +84,43 @@ class User extends Authenticatable
     public function getTable(): string
     {
         return 'users';
+    }
+
+    public function sellerProfileRelation(): HasOne
+    {
+        return $this->hasOne(SellerProfile::class);
+    }
+
+    public function buyerAppointmentsRelation(): HasMany
+    {
+        return $this->hasMany(SellerAppointment::class, 'buyer_id');
+    }
+
+    public function isSeller(): bool
+    {
+        return $this->relatedSellerProfile() !== null;
+    }
+
+    public function isVerifiedSeller(): bool
+    {
+        return $this->relatedSellerProfile() && $this->relatedSellerProfile()->getIsVerified();
+    }
+
+    public function hasActiveSellerAccount(): bool
+    {
+        return $this->relatedSellerProfile() && $this->relatedSellerProfile()->getIsActive();
+    }
+
+    public function relatedSellerProfile(): SellerProfile
+    {
+        return $this->{self::SELLER_PROFILE_RELATION};
+    }
+
+    /**
+     * @return Collection<SellerAppointment>
+     */
+    public function relatedAppointments(): Collection
+    {
+        return $this->{self::BUYER_APPOINTMENTS_RELATION};
     }
 }
