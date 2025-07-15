@@ -111,7 +111,7 @@ class User extends Authenticatable
         return $this->relatedSellerProfile() && $this->relatedSellerProfile()->getIsActive();
     }
 
-    public function relatedSellerProfile(): SellerProfile
+    public function relatedSellerProfile(): ?SellerProfile
     {
         return $this->{self::SELLER_PROFILE_RELATION};
     }
