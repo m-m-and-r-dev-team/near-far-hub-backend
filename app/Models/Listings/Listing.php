@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models\Listings;
 
+use App\Enums\Listings\ListingCategoryEnum;
 use App\Enums\Listings\ListingConditionEnum;
 use App\Enums\Listings\ListingStatusEnum;
 use App\Models\SellerProfiles\SellerProfile;
@@ -83,6 +84,7 @@ class Listing extends Model
         return $this->hasMany(SellerAppointment::class, SellerAppointment::LISTING_ID, self::ID);
     }
 
+    /** Scopes */
     public function scopeActive($query)
     {
         return $query->where(self::STATUS, ListingStatusEnum::STATUS_ACTIVE->value);
@@ -112,7 +114,7 @@ class Listing extends Model
         return $query->where(self::CONDITION, $condition);
     }
 
-    public function scopePriceRange($query, float $min = null, float $max = null)
+    public function scopePriceRange($query, ?float $min = null, ?float $max = null)
     {
         if ($min !== null) {
             $query->where(self::PRICE, '>=', $min);
@@ -131,6 +133,7 @@ class Listing extends Model
         });
     }
 
+    /** Relationships */
     public function relatedSellerProfile(): SellerProfile
     {
         return $this->{self::SELLER_PROFILE_RELATION};
@@ -144,6 +147,7 @@ class Listing extends Model
         return $this->{self::APPOINTMENTS_RELATION};
     }
 
+    /** Getters */
     public function getId(): int
     {
         return $this->getAttribute(self::ID);
@@ -214,7 +218,26 @@ class Listing extends Model
         return $this->getAttribute(self::FAVORITES_COUNT);
     }
 
-    // Helper methods
+    public function getPublishedAt(): ?Carbon
+    {
+        return $this->getAttribute(self::PUBLISHED_AT);
+    }
+
+    public function getExpiresAt(): ?Carbon
+    {
+        return $this->getAttribute(self::EXPIRES_AT);
+    }
+
+    public function getCreatedAt(): Carbon
+    {
+        return $this->getAttribute(self::CREATED_AT);
+    }
+
+    public function getUpdatedAt(): Carbon
+    {
+        return $this->getAttribute(self::UPDATED_AT);
+    }
+
     public function isActive(): bool
     {
         return $this->getStatus() === ListingStatusEnum::STATUS_ACTIVE->value;
@@ -222,13 +245,12 @@ class Listing extends Model
 
     public function isPublished(): bool
     {
-        return $this->getAttribute(self::PUBLISHED_AT) !== null &&
-            $this->getAttribute(self::PUBLISHED_AT)->isPast();
+        return $this->getPublishedAt() !== null && $this->getPublishedAt()->isPast();
     }
 
     public function isExpired(): bool
     {
-        $expiresAt = $this->getAttribute(self::EXPIRES_AT);
+        $expiresAt = $this->getExpiresAt();
         return $expiresAt !== null && $expiresAt->isPast();
     }
 
@@ -237,9 +259,16 @@ class Listing extends Model
         return $this->isActive() && $this->isPublished() && !$this->isExpired();
     }
 
-    public function getCreatedAt(): Carbon
+    public function isPublishable(): bool
     {
-        return $this->getAttribute(self::CREATED_AT);
+        $status = ListingStatusEnum::from($this->getStatus());
+        return $status->isPublishable();
+    }
+
+    public function isEditable(): bool
+    {
+        $status = ListingStatusEnum::from($this->getStatus());
+        return $status->isEditable();
     }
 
     public function getMainImage(): ?string
@@ -286,15 +315,173 @@ class Listing extends Model
         $this->decrement(self::FAVORITES_COUNT);
     }
 
+    public static function getAvailableConditions(): array
+    {
+        return ListingConditionEnum::getValues();
+    }
+
+    public static function getAvailableStatuses(): array
+    {
+        return ListingStatusEnum::getValues();
+    }
+
+    public static function getAvailableCategories(): array
+    {
+        return ListingCategoryEnum::getValues();
+    }
+
     public static function getConditionLabels(): array
     {
+        return ListingConditionEnum::getLabels();
+    }
+
+    public static function getStatusLabels(): array
+    {
+        return ListingStatusEnum::getLabels();
+    }
+
+    public static function getCategoryLabels(): array
+    {
+        return ListingCategoryEnum::getLabels();
+    }
+
+    /**
+     * Get available sort options
+     */
+    public static function getAvailableSortOptions(): array
+    {
         return [
-            ListingConditionEnum::CONDITION_NEW->value => 'New',
-            ListingConditionEnum::CONDITION_LIKE_NEW->value => 'Like New',
-            ListingConditionEnum::CONDITION_EXCELLENT->value => 'Excellent',
-            ListingConditionEnum::CONDITION_GOOD->value => 'Good',
-            ListingConditionEnum::CONDITION_FAIR->value => 'Fair',
-            ListingConditionEnum::CONDITION_POOR->value => 'Poor',
+            'newest' => 'Newest First',
+            'oldest' => 'Oldest First',
+            'price_low' => 'Price: Low to High',
+            'price_high' => 'Price: High to Low',
+            'most_viewed' => 'Most Viewed',
+            'most_favorited' => 'Most Favorited',
+            'relevance' => 'Most Relevant',
         ];
+    }
+
+    /**
+     * Get condition quality score for sorting
+     */
+    public function getConditionQualityScore(): int
+    {
+        if (!$this->getCondition()) {
+            return 0;
+        }
+
+        $condition = ListingConditionEnum::from($this->getCondition());
+        return $condition->getQualityScore();
+    }
+
+    /**
+     * Check if listing is in good condition
+     */
+    public function isInGoodCondition(): bool
+    {
+        if (!$this->getCondition()) {
+            return false;
+        }
+
+        $condition = ListingConditionEnum::from($this->getCondition());
+        return $condition->isGoodCondition();
+    }
+
+    /**
+     * Check if listing requires condition field
+     */
+    public function requiresCondition(): bool
+    {
+        $category = ListingCategoryEnum::from($this->getCategory());
+        return $category->requiresCondition();
+    }
+
+    /**
+     * Get category icon
+     */
+    public function getCategoryIcon(): string
+    {
+        $category = ListingCategoryEnum::from($this->getCategory());
+        return $category->getIcon();
+    }
+
+    /**
+     * Get category label
+     */
+    public function getCategoryLabel(): string
+    {
+        $category = ListingCategoryEnum::from($this->getCategory());
+        return $category->getLabel();
+    }
+
+    /**
+     * Get condition label
+     */
+    public function getConditionLabel(): ?string
+    {
+        if (!$this->getCondition()) {
+            return null;
+        }
+
+        $condition = ListingConditionEnum::from($this->getCondition());
+        return $condition->getLabel();
+    }
+
+    /**
+     * Get status label
+     */
+    public function getStatusLabel(): string
+    {
+        $status = ListingStatusEnum::from($this->getStatus());
+        return $status->getLabel();
+    }
+
+    /**
+     * Check if listing is new
+     */
+    public function isNew(): bool
+    {
+        return $this->getCondition() === ListingConditionEnum::CONDITION_NEW->value;
+    }
+
+    /**
+     * Get time ago string
+     */
+    public function getTimeAgo(): string
+    {
+        return $this->getCreatedAt()->diffForHumans();
+    }
+
+    /**
+     * Get days since published
+     */
+    public function getDaysSincePublished(): float
+    {
+        if (!$this->isPublished()) {
+            return 0;
+        }
+
+        return $this->getPublishedAt()->diffInDays(now());
+    }
+
+    /**
+     * Get days until expiry
+     */
+    public function getDaysUntilExpiry(): ?int
+    {
+        if (!$this->getExpiresAt()) {
+            return null;
+        }
+
+        return max(0, now()->diffInDays($this->getExpiresAt()));
+    }
+
+    /**
+     * Check if listing is expiring soon (within 7 days)
+     */
+    public function isExpiringSoon(): bool
+    {
+        $days = $this->getDaysUntilExpiry();
+        return $days !== null && $days <= 7;
     }
 }

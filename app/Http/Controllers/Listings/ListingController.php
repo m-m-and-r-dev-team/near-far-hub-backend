@@ -68,6 +68,7 @@ class ListingController extends Controller
     /**
      * Create a new listing
      * @throws UnknownProperties
+     * @throws Exception
      */
     public function createListing(CreateListingRequest $request): ListingResource
     {
@@ -147,6 +148,7 @@ class ListingController extends Controller
 
     /**
      * Publish a listing
+     * @throws Exception
      */
     public function publishListing(int $id): ListingResource
     {
@@ -157,6 +159,7 @@ class ListingController extends Controller
 
     /**
      * Unpublish a listing
+     * @throws Exception
      */
     public function unpublishListing(int $id): ListingResource
     {
@@ -167,6 +170,7 @@ class ListingController extends Controller
 
     /**
      * Mark listing as sold
+     * @throws Exception
      */
     public function markAsSold(int $id): ListingResource
     {

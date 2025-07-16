@@ -92,6 +92,14 @@ class User extends Authenticatable
         return $this->hasOne(SellerProfile::class);
     }
 
+    /**
+     * Alias for sellerProfileRelation() to work with Laravel factories
+     */
+    public function sellerProfile(): HasOne
+    {
+        return $this->sellerProfileRelation();
+    }
+
     public function buyerAppointmentsRelation(): HasMany
     {
         return $this->hasMany(SellerAppointment::class, 'buyer_id');
