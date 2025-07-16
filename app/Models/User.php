@@ -26,6 +26,7 @@ class User extends Authenticatable
     public const REMEMBER_TOKEN = 'remember_token';
     public const CREATED_AT = 'created_at';
     public const UPDATED_AT = 'updated_at';
+    public const TABLE = 'users';
 
     /**
      * The attributes that are mass assignable.

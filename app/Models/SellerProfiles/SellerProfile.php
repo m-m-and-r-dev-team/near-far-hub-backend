@@ -36,6 +36,7 @@ class SellerProfile extends Model
     public const DAY_OF_WEEK = 'day_of_week';
     public const CREATED_AT = 'created_at';
     public const UPDATED_AT = 'updated_at';
+    public const TABLE = 'seller_profiles';
 
     protected $fillable = [
         self::USER_ID,

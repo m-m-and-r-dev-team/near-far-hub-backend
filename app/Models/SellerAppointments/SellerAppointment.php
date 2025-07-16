@@ -28,6 +28,7 @@ class SellerAppointment extends Model
     public const MEETING_NOTES = 'meeting_notes';
     public const CREATED_AT = 'created_at';
     public const UPDATED_AT = 'updated_at';
+    public const TABLE = 'seller_appointments';
 
     protected $fillable = [
         self::SELLER_PROFILE_ID,
