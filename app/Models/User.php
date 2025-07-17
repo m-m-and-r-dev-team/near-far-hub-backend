@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -70,6 +71,21 @@ class User extends Authenticatable
     public function getEmail(): string
     {
         return $this->getAttribute(self::EMAIL);
+    }
+
+    public function getEmailVerifiedAt(): Carbon
+    {
+        return $this->getAttribute(self::EMAIL_VERIFIED_AT);
+    }
+
+    public function getCreatedAt(): Carbon
+    {
+        return $this->getAttribute(self::CREATED_AT);
+    }
+
+    public function getUpdatedAt(): Carbon
+    {
+        return $this->getAttribute(self::UPDATED_AT);
     }
 
     public function getTable(): string
