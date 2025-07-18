@@ -16,16 +16,19 @@ class UserResource extends JsonResource
      */
     public $resource;
 
-    public function toArray(Request $request): array
+    protected array $conditionalFields = [
+        'name' => User::NAME,
+        'email' => User::EMAIL,
+        'emailVerifiedAt' => User::EMAIL_VERIFIED_AT,
+        'createdAt' => User::CREATED_AT,
+        'updatedAt' => User::UPDATED_AT,
+    ];
+
+    protected function getData(Request $request): array
     {
         return [
             'id' => $this->resource->getId(),
-            'name' => $this->resource->getName(),
-            'email' => $this->resource->getEmail(),
             'role' => RoleResource::make($this->resource->relatedRole()),
-            'emailVerifiedAt' => $this->resource->getEmailVerifiedAt(),
-            'createdAt' => $this->resource->getCreatedAt(),
-            'updatedAt' => $this->resource->getUpdatedAt(),
             'permissions' => [
                 'canSell' => $this->resource->canSell(),
                 'canModerate' => $this->resource->canModerate(),
