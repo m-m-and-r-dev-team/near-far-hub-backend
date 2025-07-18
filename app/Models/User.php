@@ -216,11 +216,6 @@ class User extends Authenticatable
         return $this->hasMany(SellerAppointment::class, 'buyer_id');
     }
 
-    public function isSeller(): bool
-    {
-        return $this->relatedSellerProfile() !== null;
-    }
-
     public function isVerifiedSeller(): bool
     {
         return $this->relatedSellerProfile() && $this->relatedSellerProfile()->getIsVerified();
