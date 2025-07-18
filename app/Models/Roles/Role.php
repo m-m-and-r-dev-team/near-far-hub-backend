@@ -7,10 +7,14 @@ namespace App\Models\Roles;
 use App\Enums\Roles\RoleEnum;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @mixin Builder
+ */
 class Role extends Model
 {
     use HasFactory;
