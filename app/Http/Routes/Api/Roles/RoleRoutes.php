@@ -13,10 +13,9 @@ class RoleRoutes implements RouteContract
     public static function api(): void
     {
         Route::prefix('roles')->middleware('auth:sanctum')->group(function () {
-            Route::get('/', [RoleController::class, 'index']);
-            Route::get('/current', [RoleController::class, 'current']);
+            Route::get('/', [RoleController::class, 'getAllAvailableRoles']);
+            Route::get('/current', [RoleController::class, 'getCurrentUserRole']);
             Route::get('/permissions', [RoleController::class, 'permissions']);
-
             Route::get('/can-upgrade-to-seller', [RoleController::class, 'canUpgradeToSeller']);
             Route::post('/upgrade-to-seller', [RoleController::class, 'upgradeToSeller']);
         });

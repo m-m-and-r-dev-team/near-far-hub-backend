@@ -6,11 +6,14 @@ namespace App\Http\Resources\Users;
 
 use App\Http\Resources\Roles\RoleResource;
 use App\Models\User;
+use App\Services\Traits\Resources\HasConditionalFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class UserResource extends JsonResource
 {
+    use HasConditionalFields;
+
     /**
      * @var User $resource
      */
@@ -24,10 +27,13 @@ class UserResource extends JsonResource
         'updatedAt' => User::UPDATED_AT,
     ];
 
-    protected function getData(Request $request): array
+    public function toArray(Request $request): array
     {
         return [
             'id' => $this->resource->getId(),
+            'isSeller' => $this->resource->isSeller(),
+            'isVerifiedSeller' => $this->resource->isVerifiedSeller(),
+            'hasActiveSellerAccount' => $this->resource->hasActiveSellerAccount(),
             'role' => RoleResource::make($this->resource->relatedRole()),
             'permissions' => [
                 'canSell' => $this->resource->canSell(),
