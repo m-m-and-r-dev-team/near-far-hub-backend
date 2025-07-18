@@ -1,8 +1,9 @@
 <?php
 
+use App\Http\Routes\Api\Auth\AuthRoutes;
+use App\Http\Routes\Api\Roles\RoleRoutes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Routes\Api\Auth\AuthRoutes;
 use App\Http\Routes\Api\Seller\SellerRoutes;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
@@ -19,5 +20,7 @@ Route::get('/health', function () {
 });
 
 AuthRoutes::api();
+
+RoleRoutes::api();
 
 SellerRoutes::api();
