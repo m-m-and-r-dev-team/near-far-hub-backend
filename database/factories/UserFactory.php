@@ -6,17 +6,17 @@ use App\Enums\Roles\RoleEnum;
 use App\Models\Roles\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\User>
+ * @method User create($attributes = [], ?Model $parent = null)
  */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
+    protected $model = User::class;
+
     protected static ?string $password;
 
     /**
@@ -35,7 +35,7 @@ class UserFactory extends Factory
             User::EMAIL_VERIFIED_AT => now(),
             User::PASSWORD => static::$password ??= Hash::make('password'),
             User::REMEMBER_TOKEN => Str::random(10),
-            User::ROLE_ID => $defaultRoleId,
+            User::ROLE_ID => $defaultRoleId = $buyerRole ? $buyerRole->getId() : 1,
         ];
     }
 
