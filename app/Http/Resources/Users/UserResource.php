@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Users;
 
+use App\Http\Resources\Roles\RoleResource;
 use App\Models\User;
 use App\Services\Traits\Resources\HasConditionalFields;
 use Illuminate\Http\Request;
@@ -33,6 +34,13 @@ class UserResource extends JsonResource
             'isSeller' => $this->resource->isSeller(),
             'isVerifiedSeller' => $this->resource->isVerifiedSeller(),
             'hasActiveSellerAccount' => $this->resource->hasActiveSellerAccount(),
+            'role' => RoleResource::make($this->resource->relatedRole()),
+            'permissions' => [
+                'canSell' => $this->resource->canSell(),
+                'canModerate' => $this->resource->canModerate(),
+                'canAccessAdmin' => $this->resource->canAccessAdmin(),
+                'canUpgradeToSeller' => $this->resource->canUpgradeToSeller(),
+            ],
         ];
     }
 }

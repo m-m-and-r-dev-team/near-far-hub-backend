@@ -1,8 +1,9 @@
 <?php
 
+use App\Http\Routes\Api\Auth\AuthRoutes;
+use App\Http\Routes\Api\Roles\RoleRoutes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Routes\Api\Auth\AuthRoutes;
 use App\Http\Routes\Api\Seller\SellerRoutes;
 use App\Http\Routes\Api\Listings\ListingRoutes;
 use App\Http\Routes\Api\Images\ImageRoutes;
@@ -24,6 +25,9 @@ Route::get('/health', function () {
 
 /** Authentication routes */
 AuthRoutes::api();
+
+/** Role routes */
+RoleRoutes::api();
 
 /** Seller routes */
 SellerRoutes::api();

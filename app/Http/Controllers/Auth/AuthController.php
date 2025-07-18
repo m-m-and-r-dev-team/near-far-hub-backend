@@ -58,7 +58,7 @@ class AuthController extends Controller
     /**
      * @throws AuthenticationException
      */
-    public function user(): UserResource
+    public function getCurrentUser(): UserResource
     {
         return UserResource::make(
             $this->authLogicRepository->getCurrentUser()

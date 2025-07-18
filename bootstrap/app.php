@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Middleware\AdminMiddleware;
+use App\Http\Middleware\ModeratorMiddleware;
+use App\Http\Middleware\RoleMiddleware;
+use App\Http\Middleware\SellerMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -22,6 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+            'role' => RoleMiddleware::class,
+            'admin' => AdminMiddleware::class,
+            'moderator' => ModeratorMiddleware::class,
+            'seller' => SellerMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
