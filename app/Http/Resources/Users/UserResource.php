@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Users;
 
+use App\Http\Resources\Roles\RoleResource;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -27,6 +28,13 @@ class UserResource extends JsonResource
     {
         return [
             'id' => $this->resource->getId(),
+            'role' => RoleResource::make($this->resource->relatedRole()),
+            'permissions' => [
+                'canSell' => $this->resource->canSell(),
+                'canModerate' => $this->resource->canModerate(),
+                'canAccessAdmin' => $this->resource->canAccessAdmin(),
+                'canUpgradeToSeller' => $this->resource->canUpgradeToSeller(),
+            ],
         ];
     }
 }

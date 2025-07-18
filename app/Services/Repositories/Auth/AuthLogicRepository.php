@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Services\Repositories\Auth;
 
+use App\Enums\Roles\RoleEnum;
 use App\Http\DataTransferObjects\Auth\AuthResponseData;
 use App\Http\DataTransferObjects\Auth\LoginRequestData;
 use App\Http\DataTransferObjects\Auth\RegisterRequestData;
+use App\Models\Roles\Role;
 use App\Models\User;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Spatie\DataTransferObject\Exceptions\UnknownProperties;
 
 class AuthLogicRepository
@@ -21,7 +24,8 @@ class AuthLogicRepository
 
     public function __construct(
         private readonly AuthDbRepository $authDbRepository
-    ) {
+    )
+    {
     }
 
     /**
@@ -29,11 +33,22 @@ class AuthLogicRepository
      */
     public function register(RegisterRequestData $data): AuthResponseData
     {
-        $user = $this->authDbRepository->create([
-            'name' => $data->name,
-            'email' => $data->email,
-            'password' => Hash::make($data->password),
-        ]);
+        $buyerRole = Role::where(Role::NAME, RoleEnum::BUYER->value)->first();
+
+        if (!$buyerRole) {
+            throw new RuntimeException('Buyer role not found. Please run database seeders.');
+        }
+
+        $payload = [
+            User::NAME => $data->name,
+            User::EMAIL => $data->email,
+            User::PASSWORD => Hash::make($data->password),
+            User::ROLE_ID => $buyerRole->getId(),
+        ];
+
+        $user = $this->authDbRepository->create($payload);
+
+        $user->load(User::ROLE_RELATION);
 
         $token = $user->createToken(self::TOKEN_NAME)->plainTextToken;
 
@@ -52,11 +67,13 @@ class AuthLogicRepository
     {
         $user = $this->authDbRepository->findByEmail($data->email);
 
-        if (!$user || !Hash::check($data->password, $user->password)) {
+        if (!$user || !Hash::check($data->password, $user->getPassword())) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
         }
+
+        $user->load(User::ROLE_RELATION);
 
         if (!$data->remember) {
             $user->tokens()->delete();
@@ -101,11 +118,31 @@ class AuthLogicRepository
             throw new AuthenticationException('User not authenticated');
         }
 
+        $user->load(User::ROLE_RELATION);
+
         return $user;
     }
 
     public function revokeAllTokens(User $user): void
     {
         $user->tokens()->delete();
+    }
+
+    public function upgradeToSeller(User $user): bool
+    {
+        if (!$user->canUpgradeToSeller()) {
+            return false;
+        }
+
+        $sellerRole = Role::where(Role::NAME, RoleEnum::SELLER->value)->first();
+
+        if (!$sellerRole) {
+            throw new RuntimeException('Seller role not found.');
+        }
+
+        $user->update([User::ROLE_ID => $sellerRole->getId()]);
+        $user->load(User::ROLE_RELATION);
+
+        return true;
     }
 }
