@@ -18,7 +18,9 @@ use Illuminate\Support\Facades\Auth;
 class RoleController extends Controller
 {
     public function __construct(
-        private readonly AuthLogicRepository $authLogicRepository
+        private readonly AuthLogicRepository $authLogicRepository,
+        private readonly Role $role,
+        private readonly Auth $auth
     )
     {
     }
@@ -28,7 +30,7 @@ class RoleController extends Controller
      */
     public function getAllAvailableRoles(): AnonymousResourceCollection
     {
-        $roles = Role::where(Role::IS_ACTIVE, true)->get();
+        $roles = $this->role->where(Role::IS_ACTIVE, true)->get();
 
         return RoleResource::collection($roles);
     }
@@ -39,7 +41,7 @@ class RoleController extends Controller
     public function getCurrentUserRole(): RoleResource
     {
         /** @var User $user */
-        $user = Auth::user();
+        $user = $this->auth->user();
 
         return RoleResource::make($user->relatedRole());
     }
@@ -50,7 +52,7 @@ class RoleController extends Controller
     public function upgradeToSeller(Request $request): JsonResponse
     {
         /** @var User $user */
-        $user = Auth::user();
+        $user = $this->auth->user();
 
         if (!$user->canUpgradeToSeller()) {
             return response()->json([
@@ -82,7 +84,7 @@ class RoleController extends Controller
     public function canUpgradeToSeller(): JsonResponse
     {
         /** @var User $user */
-        $user = Auth::user();
+        $user = $this->auth->user();
 
         return response()->json([
             'canUpgrade' => $user->canUpgradeToSeller(),
@@ -97,7 +99,7 @@ class RoleController extends Controller
     public function permissions(): JsonResponse
     {
         /** @var User $user */
-        $user = Auth::user();
+        $user = $this->auth->user();
 
         return response()->json([
             'role' => $user->getRoleName(),

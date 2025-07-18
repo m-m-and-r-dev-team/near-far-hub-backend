@@ -15,17 +15,20 @@ class RoleResource extends JsonResource
      */
     public $resource;
 
+    protected array $conditionalFields = [
+        'name' => Role::NAME,
+        'displayName' => Role::DISPLAY_NAME,
+        'description' => Role::DESCRIPTION,
+        'permissions' => Role::PERMISSIONS,
+        'isActive' => Role::IS_ACTIVE,
+        'createdAt' => Role::CREATED_AT,
+        'updatedAt' => Role::UPDATED_AT,
+    ];
+
     public function toArray(Request $request): array
     {
         return [
             'id' => $this->resource->getId(),
-            'name' => $this->resource->getName(),
-            'displayName' => $this->resource->getDisplayName(),
-            'description' => $this->resource->getDescription(),
-            'permissions' => $this->resource->getPermissions(),
-            'isActive' => $this->resource->getIsActive(),
-            'createdAt' => $this->resource->getCreatedAt(),
-            'updatedAt' => $this->resource->getUpdatedAt(),
         ];
     }
 }
