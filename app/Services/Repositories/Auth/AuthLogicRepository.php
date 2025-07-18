@@ -14,6 +14,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 use RuntimeException;
 use Spatie\DataTransferObject\Exceptions\UnknownProperties;
 
@@ -69,7 +70,7 @@ class AuthLogicRepository
 
         if (!$user || !Hash::check($data->password, $user->getPassword())) {
             throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+                'error' => ['The provided credentials are incorrect.'],
             ]);
         }
 
@@ -101,7 +102,8 @@ class AuthLogicRepository
         }
 
         $currentToken = $user->currentAccessToken();
-        if ($currentToken) {
+
+        if ($currentToken instanceof PersonalAccessToken) {
             $currentToken->delete();
         }
     }
