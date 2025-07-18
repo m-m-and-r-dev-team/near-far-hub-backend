@@ -12,6 +12,7 @@ use App\Models\Images\Image;
 use App\Models\SellerProfiles\SellerProfile;
 use App\Models\SellerAppointments\SellerAppointment;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +20,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Collection;
 
+/**
+ * @mixin Builder
+ */
 class Listing extends Model
 {
     use HasFactory;

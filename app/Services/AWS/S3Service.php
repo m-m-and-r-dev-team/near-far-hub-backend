@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Services\AWS;
 
 use App\Enums\Images\ImageTypeEnum;
+use App\Exceptions\Images\ImageUploadException;
 use Exception;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Intervention\Image\Facades\Image;
 
 class S3Service
 {
@@ -33,10 +34,22 @@ class S3Service
         ?int $entityId = null,
         bool $makePublic = true
     ): array {
+        Log::info('File upload started', [
+            'file_size' => $file->getSize(),
+            'mime_type' => $file->getMimeType(),
+            'image_type' => $imageType->value,
+            'entity_id' => $entityId
+        ]);
+
         $this->validateFile($file, $imageType);
 
+        // Check memory limit
+        $memoryLimit = $this->getMemoryLimitInBytes();
+        if ($memoryLimit > 0 && $file->getSize() > ($memoryLimit * 0.8)) {
+            throw ImageUploadException::fileTooLarge($file->getSize());
+        }
+
         $fileName = $this->generateFileName($file, $imageType, $entityId);
-        $filePath = $imageType->getStoragePath() . '/' . $fileName;
 
         try {
             // Upload original file
@@ -48,7 +61,7 @@ class S3Service
             );
 
             if (!$uploadedPath) {
-                throw new Exception('Failed to upload file');
+                throw ImageUploadException::storageFailed('Failed to upload file to storage');
             }
 
             $fileData = [
@@ -66,20 +79,28 @@ class S3Service
                 $fileData['width'] = $dimensions['width'];
                 $fileData['height'] = $dimensions['height'];
 
-                // Generate thumbnails for images if needed
+                // Store thumbnail paths (actual generation can be done later via queue)
                 if ($imageType->requiresImageDimensions()) {
-                    $fileData['thumbnails'] = $this->generateThumbnails($file, $uploadedPath, $imageType);
+                    $fileData['thumbnails'] = $this->generateThumbnailPaths($uploadedPath);
                 }
             }
 
+            Log::info('File upload completed', ['file_path' => $uploadedPath]);
             return $fileData;
 
         } catch (Exception $e) {
+            Log::error('File upload failed', ['error' => $e->getMessage()]);
+
             // Clean up if upload failed
             if (isset($uploadedPath) && Storage::disk($this->disk)->exists($uploadedPath)) {
                 Storage::disk($this->disk)->delete($uploadedPath);
             }
-            throw new Exception('File upload failed: ' . $e->getMessage());
+
+            if ($e instanceof ImageUploadException) {
+                throw $e;
+            }
+
+            throw ImageUploadException::storageFailed($e->getMessage());
         }
     }
 
@@ -98,7 +119,7 @@ class S3Service
         $maxFiles = $imageType->getMaxImagesPerEntity();
 
         if (count($files) > $maxFiles) {
-            throw new Exception("Maximum {$maxFiles} files allowed for {$imageType->getLabel()}");
+            throw ImageUploadException::uploadLimitExceeded($maxFiles);
         }
 
         $uploadedFiles = [];
@@ -138,6 +159,7 @@ class S3Service
             }
             return true;
         } catch (Exception $e) {
+            Log::error('File deletion failed', ['file_path' => $filePath, 'error' => $e->getMessage()]);
             return false;
         }
     }
@@ -158,6 +180,7 @@ class S3Service
 
             return Storage::disk($this->disk)->delete($existingPaths);
         } catch (Exception $e) {
+            Log::error('Multiple file deletion failed', ['paths' => $filePaths, 'error' => $e->getMessage()]);
             return false;
         }
     }
@@ -167,7 +190,13 @@ class S3Service
      */
     public function getFileUrl(string $filePath): string
     {
+        // Add CDN support
+        $cdnUrl = config('upload.cdn_url');
+
         if ($this->disk === 's3') {
+            if ($cdnUrl) {
+                return $cdnUrl . '/' . $filePath;
+            }
             return Storage::disk('s3')->url($filePath);
         }
 
@@ -183,7 +212,6 @@ class S3Service
             return Storage::disk('s3')->temporaryUrl($filePath, now()->addMinutes($expirationMinutes));
         }
 
-        // For local storage, return regular URL
         return $this->getFileUrl($filePath);
     }
 
@@ -211,6 +239,7 @@ class S3Service
         try {
             return Storage::disk($this->disk)->move($fromPath, $toPath);
         } catch (Exception $e) {
+            Log::error('File move failed', ['from' => $fromPath, 'to' => $toPath, 'error' => $e->getMessage()]);
             return false;
         }
     }
@@ -223,38 +252,145 @@ class S3Service
         try {
             return Storage::disk($this->disk)->copy($fromPath, $toPath);
         } catch (Exception $e) {
+            Log::error('File copy failed', ['from' => $fromPath, 'to' => $toPath, 'error' => $e->getMessage()]);
             return false;
         }
     }
 
     /**
+     * Get current bucket name
+     */
+    public function getBucket(): string
+    {
+        return $this->bucket;
+    }
+
+    /**
+     * Get storage disk instance
+     */
+    public function getDisk(): \Illuminate\Contracts\Filesystem\Filesystem
+    {
+        return Storage::disk($this->disk);
+    }
+
+    /**
+     * Get current storage disk name
+     */
+    public function getDiskName(): string
+    {
+        return $this->disk;
+    }
+
+    /**
+     * Check if using S3
+     */
+    public function isUsingS3(): bool
+    {
+        return $this->disk === 's3';
+    }
+
+    /**
      * Validate uploaded file
      *
-     * @throws Exception
+     * @throws ImageUploadException
      */
     private function validateFile(UploadedFile $file, ImageTypeEnum $imageType): void
     {
         // Check if file is valid
         if (!$file->isValid()) {
-            throw new Exception('Invalid file upload');
+            throw ImageUploadException::securityViolation('Invalid file upload');
+        }
+
+        // Additional security validation for images
+        if ($this->isImage($file)) {
+            $this->validateImageSecurity($file);
         }
 
         // Check file size
         if ($file->getSize() > $imageType->getMaxFileSize()) {
-            $maxSizeMB = round($imageType->getMaxFileSize() / 1024 / 1024, 2);
-            throw new Exception("File size exceeds maximum allowed size of {$maxSizeMB}MB");
+            throw ImageUploadException::fileTooLarge($imageType->getMaxFileSize());
         }
 
         // Check mime type
         if (!in_array($file->getMimeType(), $imageType->getAllowedMimeTypes())) {
-            throw new Exception('File type not allowed');
+            throw ImageUploadException::invalidFileType(
+                $file->getMimeType(),
+                $imageType->getAllowedMimeTypes()
+            );
         }
 
         // Check file extension
         $extension = strtolower($file->getClientOriginalExtension());
         if (!in_array($extension, $imageType->getAllowedExtensions())) {
-            throw new Exception('File extension not allowed');
+            throw ImageUploadException::invalidFileType(
+                $extension,
+                $imageType->getAllowedExtensions()
+            );
         }
+    }
+
+    /**
+     * Additional security validation for images
+     *
+     * @throws ImageUploadException
+     */
+    private function validateImageSecurity(UploadedFile $file): void
+    {
+        // Validate actual image content, not just extension
+        $imageInfo = getimagesize($file->getRealPath());
+        if (!$imageInfo) {
+            throw ImageUploadException::securityViolation('Invalid image file content');
+        }
+
+        // Check for suspicious file signatures
+        $fileHandle = fopen($file->getRealPath(), 'rb');
+        if ($fileHandle) {
+            $header = fread($fileHandle, 10);
+            fclose($fileHandle);
+
+            // Check for PHP tags or other suspicious content
+            if (strpos($header, '<?php') !== false || strpos($header, '<?=') !== false) {
+                throw ImageUploadException::securityViolation('Suspicious file content detected');
+            }
+        }
+
+        // Additional check: ensure the file extension matches the actual image type
+        $detectedType = $imageInfo[2];
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        $validTypes = [
+            'jpg' => [IMAGETYPE_JPEG],
+            'jpeg' => [IMAGETYPE_JPEG],
+            'png' => [IMAGETYPE_PNG],
+            'gif' => [IMAGETYPE_GIF],
+            'webp' => [IMAGETYPE_WEBP],
+        ];
+
+        if (isset($validTypes[$extension]) && !in_array($detectedType, $validTypes[$extension])) {
+            throw ImageUploadException::securityViolation('File extension does not match image type');
+        }
+    }
+
+    /**
+     * Get memory limit in bytes
+     */
+    private function getMemoryLimitInBytes(): int
+    {
+        $memoryLimit = ini_get('memory_limit');
+        if ($memoryLimit === false || $memoryLimit === '' || $memoryLimit === '-1') {
+            return 0; // No limit or unlimited
+        }
+
+        // Convert memory limit to bytes
+        $value = (int) $memoryLimit;
+        $unit = strtolower(substr($memoryLimit, -1));
+
+        return match ($unit) {
+            'g' => $value * 1024 * 1024 * 1024,
+            'm' => $value * 1024 * 1024,
+            'k' => $value * 1024,
+            default => $value,
+        };
     }
 
     /**
@@ -281,7 +417,7 @@ class S3Service
     }
 
     /**
-     * Get image dimensions
+     * Get image dimensions using native PHP
      */
     private function getImageDimensions(UploadedFile $file): array
     {
@@ -297,37 +433,27 @@ class S3Service
     }
 
     /**
-     * Generate thumbnails for images
+     * Generate thumbnail paths (actual generation can be done via queue)
      */
-    private function generateThumbnails(UploadedFile $file, string $originalPath, ImageTypeEnum $imageType): array
+    private function generateThumbnailPaths(string $originalPath): array
     {
-        if (!$this->isImage($file)) {
-            return [];
-        }
-
         $thumbnails = [];
-        $sizes = [
+        $sizes = config('upload.thumbnails.sizes', [
             'thumbnail' => ['width' => 150, 'height' => 150],
             'medium' => ['width' => 400, 'height' => 300],
             'large' => ['width' => 800, 'height' => 600],
-        ];
+        ]);
 
         foreach ($sizes as $sizeName => $dimensions) {
-            try {
-                $thumbnailPath = $this->generateThumbnailPath($originalPath, $sizeName);
+            $thumbnailPath = $this->generateThumbnailPath($originalPath, $sizeName);
 
-                // Create thumbnail using Intervention Image (you'll need to install this package)
-                // For now, we'll just store the paths - implement actual thumbnail generation as needed
-                $thumbnails[$sizeName] = [
-                    'path' => $thumbnailPath,
-                    'url' => $this->getFileUrl($thumbnailPath),
-                    'width' => $dimensions['width'],
-                    'height' => $dimensions['height'],
-                ];
-            } catch (Exception $e) {
-                // If thumbnail generation fails, continue with others
-                continue;
-            }
+            $thumbnails[$sizeName] = [
+                'path' => $thumbnailPath,
+                'url' => $this->getFileUrl($thumbnailPath),
+                'width' => $dimensions['width'],
+                'height' => $dimensions['height'],
+                'exists' => false, // Will be true after actual generation
+            ];
         }
 
         return $thumbnails;
@@ -340,29 +466,5 @@ class S3Service
     {
         $pathInfo = pathinfo($originalPath);
         return $pathInfo['dirname'] . '/thumbnails/' . $pathInfo['filename'] . "_{$sizeName}." . $pathInfo['extension'];
-    }
-
-    /**
-     * Get storage disk instance
-     */
-    public function getDisk(): \Illuminate\Contracts\Filesystem\Filesystem
-    {
-        return Storage::disk($this->disk);
-    }
-
-    /**
-     * Get current storage disk name
-     */
-    public function getDiskName(): string
-    {
-        return $this->disk;
-    }
-
-    /**
-     * Check if using S3
-     */
-    public function isUsingS3(): bool
-    {
-        return $this->disk === 's3';
     }
 }

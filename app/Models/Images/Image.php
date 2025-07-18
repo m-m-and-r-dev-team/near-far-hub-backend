@@ -188,10 +188,12 @@ class Image extends Model
     // Helper methods
     public function getUrl(string $size = 'original'): string
     {
-        $disk = config('filesystems.default');
+        $baseUrl = config('app.cdn_url') ?? config('app.url');
 
-        if ($disk === 's3') {
-            return Storage::disk('s3')->url($this->getFilePath());
+        if ($this->disk === 's3') {
+            return config('app.cdn_url')
+                ? $baseUrl . '/' . $this->getFilePath()
+                : Storage::disk('s3')->url($this->getFilePath());
         }
 
         return Storage::url($this->getFilePath());

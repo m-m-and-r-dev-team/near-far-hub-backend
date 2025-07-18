@@ -29,7 +29,11 @@ class ListingRepository
     public function getListings(array $filters): LengthAwarePaginator
     {
         $query = $this->listing->query()
-            ->with([Listing::SELLER_PROFILE_RELATION . '.' . SellerProfile::USER_RELATION])
+            ->with([
+                Listing::SELLER_PROFILE_RELATION . '.' . SellerProfile::USER_RELATION,
+                Listing::IMAGES_RELATION,
+                Listing::PRIMARY_IMAGE_RELATION,
+            ])
             ->active()
             ->published()
             ->notExpired();
