@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Carbon\Carbon;
+use Database\Factories\UserFactory;
 use App\Enums\Roles\RoleEnum;
 use App\Models\Roles\Role;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -84,6 +84,21 @@ class User extends Authenticatable
     public function getEmail(): string
     {
         return $this->getAttribute(self::EMAIL);
+    }
+
+    public function getEmailVerifiedAt(): Carbon
+    {
+        return $this->getAttribute(self::EMAIL_VERIFIED_AT);
+    }
+
+    public function getCreatedAt(): Carbon
+    {
+        return $this->getAttribute(self::CREATED_AT);
+    }
+
+    public function getUpdatedAt(): Carbon
+    {
+        return $this->getAttribute(self::UPDATED_AT);
     }
 
     public function getRoleId(): int
@@ -173,23 +188,13 @@ class User extends Authenticatable
         return $this->getAttribute(self::PASSWORD);
     }
 
-    public function getEmailVerifiedAt(): Carbon
-    {
-        return $this->getAttribute(self::EMAIL_VERIFIED_AT);
-    }
-
-    public function getCreatedAt(): Carbon
-    {
-        return $this->getAttribute(self::CREATED_AT);
-    }
-
-    public function getUpdatedAt(): Carbon
-    {
-        return $this->getAttribute(self::UPDATED_AT);
-    }
-
     public function getTable(): string
     {
         return 'users';
+    }
+
+    public static function newFactory(): UserFactory
+    {
+        return UserFactory::new();
     }
 }
