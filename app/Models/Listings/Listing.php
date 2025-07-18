@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Models\Listings;
 
+use App\Enums\Images\ImageTypeEnum;
 use App\Enums\Listings\ListingCategoryEnum;
 use App\Enums\Listings\ListingConditionEnum;
 use App\Enums\Listings\ListingStatusEnum;
+use App\Models\Images\Image;
 use App\Models\SellerProfiles\SellerProfile;
 use App\Models\SellerAppointments\SellerAppointment;
 use Carbon\Carbon;
@@ -14,6 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Collection;
 
 class Listing extends Model
@@ -27,7 +30,7 @@ class Listing extends Model
     public const PRICE = 'price';
     public const CATEGORY = 'category';
     public const CONDITION = 'condition';
-    public const IMAGES = 'images';
+    public const IMAGES = 'images'; // Keeping for backward compatibility but will be deprecated
     public const LOCATION = 'location';
     public const CAN_DELIVER_GLOBALLY = 'can_deliver_globally';
     public const REQUIRES_APPOINTMENT = 'requires_appointment';
@@ -46,7 +49,7 @@ class Listing extends Model
         self::PRICE,
         self::CATEGORY,
         self::CONDITION,
-        self::IMAGES,
+        self::IMAGES, // Keep for backward compatibility during migration
         self::LOCATION,
         self::CAN_DELIVER_GLOBALLY,
         self::REQUIRES_APPOINTMENT,
@@ -58,7 +61,7 @@ class Listing extends Model
     ];
 
     protected $casts = [
-        self::IMAGES => 'array',
+        self::IMAGES => 'array', // Keep for backward compatibility
         self::LOCATION => 'array',
         self::CAN_DELIVER_GLOBALLY => 'boolean',
         self::REQUIRES_APPOINTMENT => 'boolean',
@@ -73,6 +76,12 @@ class Listing extends Model
     const SELLER_PROFILE_RELATION = 'sellerProfileRelation';
     /** @see Listing::appointmentsRelation() */
     const APPOINTMENTS_RELATION = 'appointmentsRelation';
+    /** @see Listing::imagesRelation() */
+    const IMAGES_RELATION = 'imagesRelation';
+    /** @see Listing::primaryImageRelation() */
+    const PRIMARY_IMAGE_RELATION = 'primaryImageRelation';
+    /** @see Listing::galleryImagesRelation() */
+    const GALLERY_IMAGES_RELATION = 'galleryImagesRelation';
 
     public function sellerProfileRelation(): BelongsTo
     {
@@ -82,6 +91,34 @@ class Listing extends Model
     public function appointmentsRelation(): HasMany
     {
         return $this->hasMany(SellerAppointment::class, SellerAppointment::LISTING_ID, self::ID);
+    }
+
+    public function imagesRelation(): MorphMany
+    {
+        return $this->morphMany(Image::class, 'imageable')
+            ->where('type', 'in', [
+                ImageTypeEnum::LISTING_PRIMARY->value,
+                ImageTypeEnum::LISTING_GALLERY->value
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('created_at');
+    }
+
+    public function primaryImageRelation(): MorphMany
+    {
+        return $this->morphMany(Image::class, 'imageable')
+            ->where('type', ImageTypeEnum::LISTING_PRIMARY->value)
+            ->where('is_primary', true)
+            ->where('is_active', true);
+    }
+
+    public function galleryImagesRelation(): MorphMany
+    {
+        return $this->morphMany(Image::class, 'imageable')
+            ->where('type', ImageTypeEnum::LISTING_GALLERY->value)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('created_at');
     }
 
     /** Scopes */
@@ -133,6 +170,15 @@ class Listing extends Model
         });
     }
 
+    public function scopeWithImages($query)
+    {
+        return $query->with([
+            self::IMAGES_RELATION,
+            self::PRIMARY_IMAGE_RELATION,
+            self::GALLERY_IMAGES_RELATION
+        ]);
+    }
+
     /** Relationships */
     public function relatedSellerProfile(): SellerProfile
     {
@@ -147,7 +193,28 @@ class Listing extends Model
         return $this->{self::APPOINTMENTS_RELATION};
     }
 
-    /** Getters */
+    /**
+     * @return Collection<Image>
+     */
+    public function relatedImages(): Collection
+    {
+        return $this->{self::IMAGES_RELATION};
+    }
+
+    public function relatedPrimaryImage(): ?Image
+    {
+        return $this->{self::PRIMARY_IMAGE_RELATION}->first();
+    }
+
+    /**
+     * @return Collection<Image>
+     */
+    public function relatedGalleryImages(): Collection
+    {
+        return $this->{self::GALLERY_IMAGES_RELATION};
+    }
+
+    /** Getters - existing methods remain the same */
     public function getId(): int
     {
         return $this->getAttribute(self::ID);
@@ -183,8 +250,17 @@ class Listing extends Model
         return $this->getAttribute(self::CONDITION);
     }
 
+    // Deprecated: Use relatedImages() instead
     public function getImages(): array
     {
+        // Try to get from new image relationships first
+        if ($this->relationLoaded(self::IMAGES_RELATION)) {
+            return $this->relatedImages()->map(function (Image $image) {
+                return $image->getUrl();
+            })->toArray();
+        }
+
+        // Fallback to old JSON field for backward compatibility
         return $this->getAttribute(self::IMAGES) ?? [];
     }
 
@@ -238,6 +314,99 @@ class Listing extends Model
         return $this->getAttribute(self::UPDATED_AT);
     }
 
+    // New image-related methods
+    public function getMainImage(): ?string
+    {
+        $primaryImage = $this->relatedPrimaryImage();
+        if ($primaryImage) {
+            return $primaryImage->getUrl();
+        }
+
+        $galleryImages = $this->relatedGalleryImages();
+        if ($galleryImages->isNotEmpty()) {
+            return $galleryImages->first()->getUrl();
+        }
+
+        // Fallback to old JSON field for backward compatibility
+        $oldImages = $this->getAttribute(self::IMAGES);
+        return !empty($oldImages) ? $oldImages[0] : null;
+    }
+
+    public function getMainImageUrl(?string $size = 'medium'): ?string
+    {
+        $primaryImage = $this->relatedPrimaryImage();
+        if ($primaryImage) {
+            return match ($size) {
+                'thumbnail' => $primaryImage->getThumbnailUrl(),
+                'medium' => $primaryImage->getMediumUrl(),
+                'full', 'original' => $primaryImage->getFullUrl(),
+                default => $primaryImage->getUrl(),
+            };
+        }
+
+        $galleryImages = $this->relatedGalleryImages();
+        if ($galleryImages->isNotEmpty()) {
+            $firstImage = $galleryImages->first();
+            return match ($size) {
+                'thumbnail' => $firstImage->getThumbnailUrl(),
+                'medium' => $firstImage->getMediumUrl(),
+                'full', 'original' => $firstImage->getFullUrl(),
+                default => $firstImage->getUrl(),
+            };
+        }
+
+        return $this->getMainImage(); // Fallback to old method
+    }
+
+    public function getAllImageUrls(?string $size = 'medium'): array
+    {
+        $urls = [];
+
+        // Add primary image first
+        $primaryImage = $this->relatedPrimaryImage();
+        if ($primaryImage) {
+            $urls[] = match ($size) {
+                'thumbnail' => $primaryImage->getThumbnailUrl(),
+                'medium' => $primaryImage->getMediumUrl(),
+                'full', 'original' => $primaryImage->getFullUrl(),
+                default => $primaryImage->getUrl(),
+            };
+        }
+
+        // Add gallery images
+        foreach ($this->relatedGalleryImages() as $image) {
+            $urls[] = match ($size) {
+                'thumbnail' => $image->getThumbnailUrl(),
+                'medium' => $image->getMediumUrl(),
+                'full', 'original' => $image->getFullUrl(),
+                default => $image->getUrl(),
+            };
+        }
+
+        // If no new images, fallback to old JSON field
+        if (empty($urls)) {
+            $urls = $this->getImages();
+        }
+
+        return $urls;
+    }
+
+    public function hasImages(): bool
+    {
+        return $this->relatedImages()->isNotEmpty() || !empty($this->getAttribute(self::IMAGES));
+    }
+
+    public function getImagesCount(): int
+    {
+        return $this->relatedImages()->count();
+    }
+
+    public function getTotalImageFileSize(): int
+    {
+        return $this->relatedImages()->sum('file_size');
+    }
+
+    // All other existing methods remain unchanged...
     public function isActive(): bool
     {
         return $this->getStatus() === ListingStatusEnum::STATUS_ACTIVE->value;
@@ -269,12 +438,6 @@ class Listing extends Model
     {
         $status = ListingStatusEnum::from($this->getStatus());
         return $status->isEditable();
-    }
-
-    public function getMainImage(): ?string
-    {
-        $images = $this->getImages();
-        return !empty($images) ? $images[0] : null;
     }
 
     public function getFormattedPrice(): string
@@ -315,6 +478,7 @@ class Listing extends Model
         $this->decrement(self::FAVORITES_COUNT);
     }
 
+    // Static methods remain the same...
     public static function getAvailableConditions(): array
     {
         return ListingConditionEnum::getValues();
@@ -345,9 +509,6 @@ class Listing extends Model
         return ListingCategoryEnum::getLabels();
     }
 
-    /**
-     * Get available sort options
-     */
     public static function getAvailableSortOptions(): array
     {
         return [
@@ -361,9 +522,7 @@ class Listing extends Model
         ];
     }
 
-    /**
-     * Get condition quality score for sorting
-     */
+    // All other existing methods...
     public function getConditionQualityScore(): int
     {
         if (!$this->getCondition()) {
@@ -374,9 +533,6 @@ class Listing extends Model
         return $condition->getQualityScore();
     }
 
-    /**
-     * Check if listing is in good condition
-     */
     public function isInGoodCondition(): bool
     {
         if (!$this->getCondition()) {
@@ -387,36 +543,24 @@ class Listing extends Model
         return $condition->isGoodCondition();
     }
 
-    /**
-     * Check if listing requires condition field
-     */
     public function requiresCondition(): bool
     {
         $category = ListingCategoryEnum::from($this->getCategory());
         return $category->requiresCondition();
     }
 
-    /**
-     * Get category icon
-     */
     public function getCategoryIcon(): string
     {
         $category = ListingCategoryEnum::from($this->getCategory());
         return $category->getIcon();
     }
 
-    /**
-     * Get category label
-     */
     public function getCategoryLabel(): string
     {
         $category = ListingCategoryEnum::from($this->getCategory());
         return $category->getLabel();
     }
 
-    /**
-     * Get condition label
-     */
     public function getConditionLabel(): ?string
     {
         if (!$this->getCondition()) {
@@ -427,34 +571,22 @@ class Listing extends Model
         return $condition->getLabel();
     }
 
-    /**
-     * Get status label
-     */
     public function getStatusLabel(): string
     {
         $status = ListingStatusEnum::from($this->getStatus());
         return $status->getLabel();
     }
 
-    /**
-     * Check if listing is new
-     */
     public function isNew(): bool
     {
         return $this->getCondition() === ListingConditionEnum::CONDITION_NEW->value;
     }
 
-    /**
-     * Get time ago string
-     */
     public function getTimeAgo(): string
     {
         return $this->getCreatedAt()->diffForHumans();
     }
 
-    /**
-     * Get days since published
-     */
     public function getDaysSincePublished(): float
     {
         if (!$this->isPublished()) {
@@ -464,9 +596,6 @@ class Listing extends Model
         return $this->getPublishedAt()->diffInDays(now());
     }
 
-    /**
-     * Get days until expiry
-     */
     public function getDaysUntilExpiry(): ?int
     {
         if (!$this->getExpiresAt()) {
@@ -476,9 +605,6 @@ class Listing extends Model
         return max(0, now()->diffInDays($this->getExpiresAt()));
     }
 
-    /**
-     * Check if listing is expiring soon (within 7 days)
-     */
     public function isExpiringSoon(): bool
     {
         $days = $this->getDaysUntilExpiry();
