@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Routes\Api\Auth\AuthRoutes;
+use App\Http\Routes\Api\Profile\ProfileRoutes;
 use App\Http\Routes\Api\Roles\RoleRoutes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -20,7 +21,6 @@ Route::get('/health', function () {
 });
 
 AuthRoutes::api();
-
 RoleRoutes::api();
-
 SellerRoutes::api();
+ProfileRoutes::api();
