@@ -36,7 +36,7 @@ class LocationController extends Controller
         }
 
         $input = $request->get('q');
-        $limit = $request->get('limit', 10);
+        $limit = (int) $request->get('limit', 10); // Cast to int to fix the type error
 
         $suggestions = $this->hybridLocationService->getLocationSuggestions($input, $limit);
 
@@ -122,7 +122,8 @@ class LocationController extends Controller
      */
     public function getPopularLocations(Request $request): JsonResponse
     {
-        $limit = min($request->get('limit', 20), 50);
+        $limit = min((int) $request->get('limit', 20), 50); // Cast to int and ensure max 50
+
         $popular = $this->hybridLocationService->getPopularLocations($limit);
 
         return response()->json([

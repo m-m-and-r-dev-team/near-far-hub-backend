@@ -31,7 +31,10 @@ class UserResource extends JsonResource
 
     public function toArray(Request $request): array
     {
-        return [
+        // Get the conditional fields data
+        $conditionalData = $this->getConditionalData($request);
+
+        return array_merge($conditionalData, [
             'id' => $this->resource->getId(),
             'isSeller' => $this->resource->isSeller(),
             'isVerifiedSeller' => $this->resource->isVerifiedSeller(),
@@ -70,6 +73,6 @@ class UserResource extends JsonResource
                 'canAccessAdmin' => $this->resource->canAccessAdmin(),
                 'canUpgradeToSeller' => $this->resource->canUpgradeToSeller(),
             ],
-        ];
+        ]);
     }
 }

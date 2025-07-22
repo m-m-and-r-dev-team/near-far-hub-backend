@@ -32,19 +32,20 @@ class UserLogicRepository
             User::BIO => $data->bio,
         ];
 
+        // Always update basic profile data first
+        $user = $this->userDbRepository->update($user, array_filter($updateData, fn($value) => $value !== null));
+
         // Handle location data if provided
         if (!empty($data->location)) {
             $locationResult = $this->hybridLocationService->saveUserLocation($userId, $data->location);
 
             if ($locationResult['success']) {
-                // The location service already updated the user, so we'll refresh
+                // Refresh user with location relations after location update
                 $user = $user->fresh(['country', 'state', 'city', 'roleRelation']);
-                return $user;
             }
         }
 
-        // Update basic data only if no location update
-        return $this->userDbRepository->update($user, array_filter($updateData, fn($value) => $value !== null));
+        return $user;
     }
 
     /**

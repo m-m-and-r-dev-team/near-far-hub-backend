@@ -59,8 +59,44 @@ class UpdateProfileRequest extends FormRequest
             self::LOCATION . '.source' => [
                 ValidationRuleHelper::NULLABLE,
                 ValidationRuleHelper::STRING,
-                'in:local,external'
-            ]
+                'in:local,external,hybrid,local_enriched,external_enriched,geocoded,google_geocoding'
+            ],
+            // Add validation for other location fields that might be sent
+            self::LOCATION . '.formatted_address' => [
+                ValidationRuleHelper::NULLABLE,
+                ValidationRuleHelper::STRING,
+                ValidationRuleHelper::max(500)
+            ],
+            self::LOCATION . '.latitude' => [
+                ValidationRuleHelper::NULLABLE,
+                'numeric',
+                'between:-90,90'
+            ],
+            self::LOCATION . '.longitude' => [
+                ValidationRuleHelper::NULLABLE,
+                'numeric',
+                'between:-180,180'
+            ],
+            self::LOCATION . '.data' => [
+                ValidationRuleHelper::NULLABLE,
+                'array'
+            ],
+            // Allow nested location data
+            self::LOCATION . '.data.city_id' => [
+                ValidationRuleHelper::NULLABLE,
+                ValidationRuleHelper::INTEGER,
+                'exists:cities,id'
+            ],
+            self::LOCATION . '.data.state_id' => [
+                ValidationRuleHelper::NULLABLE,
+                ValidationRuleHelper::INTEGER,
+                'exists:states,id'
+            ],
+            self::LOCATION . '.data.country_id' => [
+                ValidationRuleHelper::NULLABLE,
+                ValidationRuleHelper::INTEGER,
+                'exists:countries,id'
+            ],
         ];
     }
 
@@ -72,6 +108,9 @@ class UpdateProfileRequest extends FormRequest
             'phone.min' => 'Phone number must be at least 8 characters',
             'bio.max' => 'Bio cannot exceed 500 characters',
             'location.array' => 'Location must be a valid location object',
+            'location.source.in' => 'Invalid location source. Must be one of: local, external, hybrid, local_enriched, external_enriched, geocoded, google_geocoding',
+            'location.latitude.between' => 'Latitude must be between -90 and 90',
+            'location.longitude.between' => 'Longitude must be between -180 and 180',
         ];
     }
 

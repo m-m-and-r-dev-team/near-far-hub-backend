@@ -14,7 +14,7 @@ class ProfileRoutes implements RouteContract
     {
         Route::prefix('profile')->middleware('auth:sanctum')->group(function () {
             Route::get('/', [UserController::class, 'getProfile']);
-            Route::put('/', [UserController::class, 'updateProfile']);
+            Route::put('/', [UserController::class, 'updateProfileAccount']);
         });
     }
 }

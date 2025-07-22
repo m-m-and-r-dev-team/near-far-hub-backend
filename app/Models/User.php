@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Locations\City;
+use App\Models\Locations\Country;
+use App\Models\Locations\State;
 use App\Models\SellerAppointments\SellerAppointment;
 use App\Models\SellerProfiles\SellerProfile;
 use Carbon\Carbon;
