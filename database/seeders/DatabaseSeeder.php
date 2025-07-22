@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RoleSeeder::class,
+            LocationSeeder::class,
         ]);
 
         $buyerRole = Role::where(Role::NAME, RoleEnum::BUYER->value)->first();

@@ -10,11 +10,11 @@ class UpdateProfileRequestData extends DataTransferObject
 {
     public const NAME = 'name';
     public const PHONE = 'phone';
-    public const LOCATION = 'location';
     public const BIO = 'bio';
+    public const LOCATION = 'location'; // This will be the location object
 
     public string $name;
     public ?string $phone;
-    public ?string $location;
     public ?string $bio;
+    public ?array $location; // Complete location data from frontend
 }

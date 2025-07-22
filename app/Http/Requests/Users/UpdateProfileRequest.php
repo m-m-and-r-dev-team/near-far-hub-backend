@@ -15,8 +15,8 @@ class UpdateProfileRequest extends FormRequest
 {
     private const NAME = 'name';
     private const PHONE = 'phone';
-    private const LOCATION = 'location';
     private const BIO = 'bio';
+    private const LOCATION = 'location';
 
     public function authorize(): bool
     {
@@ -33,24 +33,45 @@ class UpdateProfileRequest extends FormRequest
                 ValidationRuleHelper::max(100)
             ],
             self::PHONE => [
-                ValidationRuleHelper::REQUIRED,
                 ValidationRuleHelper::NULLABLE,
                 ValidationRuleHelper::STRING,
                 ValidationRuleHelper::min(8),
                 ValidationRuleHelper::max(20)
             ],
+            self::BIO => [
+                ValidationRuleHelper::NULLABLE,
+                ValidationRuleHelper::STRING,
+                ValidationRuleHelper::max(500)
+            ],
             self::LOCATION => [
-                ValidationRuleHelper::REQUIRED,
+                ValidationRuleHelper::NULLABLE,
+                'array'
+            ],
+            self::LOCATION . '.description' => [
                 ValidationRuleHelper::NULLABLE,
                 ValidationRuleHelper::STRING,
                 ValidationRuleHelper::max(255)
             ],
-            self::BIO => [
-                ValidationRuleHelper::REQUIRED,
+            self::LOCATION . '.place_id' => [
+                ValidationRuleHelper::NULLABLE,
+                ValidationRuleHelper::STRING
+            ],
+            self::LOCATION . '.source' => [
                 ValidationRuleHelper::NULLABLE,
                 ValidationRuleHelper::STRING,
-                ValidationRuleHelper::max(500)
+                'in:local,external'
             ]
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'name.required' => 'Name is required',
+            'name.min' => 'Name must be at least 2 characters',
+            'phone.min' => 'Phone number must be at least 8 characters',
+            'bio.max' => 'Bio cannot exceed 500 characters',
+            'location.array' => 'Location must be a valid location object',
         ];
     }
 
@@ -62,8 +83,8 @@ class UpdateProfileRequest extends FormRequest
         return new UpdateProfileRequestData([
             UpdateProfileRequestData::NAME => $this->input(self::NAME),
             UpdateProfileRequestData::PHONE => $this->input(self::PHONE),
-            UpdateProfileRequestData::LOCATION => $this->input(self::LOCATION),
             UpdateProfileRequestData::BIO => $this->input(self::BIO),
+            UpdateProfileRequestData::LOCATION => $this->input(self::LOCATION),
         ]);
     }
 
