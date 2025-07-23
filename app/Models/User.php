@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Locations\City;
+use App\Models\Locations\Country;
+use App\Models\Locations\State;
 use App\Models\SellerAppointments\SellerAppointment;
 use App\Models\SellerProfiles\SellerProfile;
 use Carbon\Carbon;
@@ -36,6 +39,18 @@ class User extends Authenticatable
     public const ROLE_ID = 'role_id';
     public const CREATED_AT = 'created_at';
     public const UPDATED_AT = 'updated_at';
+    public const PHONE = 'phone';
+    public const BIO = 'bio';
+    public const LOCATION_DISPLAY = 'location_display';
+    public const LOCATION_DATA = 'location_data';
+    public const COUNTRY_ID = 'country_id';
+    public const STATE_ID = 'state_id';
+    public const CITY_ID = 'city_id';
+    public const ADDRESS_LINE = 'address_line';
+    public const POSTAL_CODE = 'postal_code';
+    public const LATITUDE = 'latitude';
+    public const LONGITUDE = 'longitude';
+    public const GOOGLE_PLACE_ID = 'google_place_id';
 
     /**
      * The attributes that are mass assignable.
@@ -47,6 +62,18 @@ class User extends Authenticatable
         self::EMAIL,
         self::PASSWORD,
         self::ROLE_ID,
+        self::PHONE,
+        self::BIO,
+        self::LOCATION_DISPLAY,
+        self::LOCATION_DATA,
+        self::COUNTRY_ID,
+        self::STATE_ID,
+        self::CITY_ID,
+        self::ADDRESS_LINE,
+        self::POSTAL_CODE,
+        self::LATITUDE,
+        self::LONGITUDE,
+        self::GOOGLE_PLACE_ID,
     ];
 
     /**
@@ -76,6 +103,9 @@ class User extends Authenticatable
         return [
             self::EMAIL_VERIFIED_AT => 'datetime',
             self::PASSWORD => 'hashed',
+            self::LOCATION_DATA => 'array',
+            self::LATITUDE => 'decimal:8',
+            self::LONGITUDE => 'decimal:8',
         ];
     }
 
@@ -237,6 +267,52 @@ class User extends Authenticatable
     public function relatedAppointments(): Collection
     {
         return $this->{self::BUYER_APPOINTMENTS_RELATION};
+    }
+
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
+    }
+
+    public function state(): BelongsTo
+    {
+        return $this->belongsTo(State::class);
+    }
+
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(City::class);
+    }
+
+    // Add location methods
+    public function getFullLocationAttribute(): ?string
+    {
+        if ($this->location_display) {
+            return $this->location_display;
+        }
+
+        $parts = [];
+        if ($this->city) $parts[] = $this->city->name;
+        if ($this->state) $parts[] = $this->state->name;
+        if ($this->country) $parts[] = $this->country->name;
+
+        return empty($parts) ? null : implode(', ', $parts);
+    }
+
+    public function hasLocationData(): bool
+    {
+        return !empty($this->location_display) || !empty($this->location_data);
+    }
+
+    public function getCoordinates(): ?array
+    {
+        if ($this->latitude && $this->longitude) {
+            return [
+                'latitude' => (float) $this->latitude,
+                'longitude' => (float) $this->longitude
+            ];
+        }
+        return null;
     }
 
     public static function newFactory(): UserFactory
