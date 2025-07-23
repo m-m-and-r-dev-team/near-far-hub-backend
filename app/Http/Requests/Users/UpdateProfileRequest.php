@@ -59,7 +59,7 @@ class UpdateProfileRequest extends FormRequest
             self::LOCATION . '.source' => [
                 ValidationRuleHelper::NULLABLE,
                 ValidationRuleHelper::STRING,
-                'in:local,external,hybrid,local_enriched,external_enriched,geocoded,google_geocoding'
+                'in:local,external,hybrid,local_enriched,external_enriched,geocoded,google_geocoding,config,in_memory,config_geocoding'
             ],
             // Add validation for other location fields that might be sent
             self::LOCATION . '.formatted_address' => [
@@ -108,7 +108,7 @@ class UpdateProfileRequest extends FormRequest
             'phone.min' => 'Phone number must be at least 8 characters',
             'bio.max' => 'Bio cannot exceed 500 characters',
             'location.array' => 'Location must be a valid location object',
-            'location.source.in' => 'Invalid location source. Must be one of: local, external, hybrid, local_enriched, external_enriched, geocoded, google_geocoding',
+            'location.source.in' => 'Invalid location source. Must be one of: local, external, hybrid, local_enriched, external_enriched, geocoded, google_geocoding, config, in_memory, config_geocoding',
             'location.latitude.between' => 'Latitude must be between -90 and 90',
             'location.longitude.between' => 'Longitude must be between -180 and 180',
         ];
