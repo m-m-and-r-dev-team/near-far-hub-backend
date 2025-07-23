@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\Images\ImageTypeEnum;
+use App\Models\Images\Image;
+use App\Models\Listings\Listing;
 use App\Models\Locations\City;
 use App\Models\Locations\Country;
 use App\Models\Locations\State;
@@ -16,6 +19,8 @@ use App\Models\Roles\Role;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
@@ -92,6 +97,10 @@ class User extends Authenticatable
     const BUYER_APPOINTMENTS_RELATION = 'buyerAppointmentsRelation';
     /** @see User::roleRelation() */
     const ROLE_RELATION = 'roleRelation';
+    /** @see User::imagesRelation() */
+    const IMAGES_RELATION = 'imagesRelation';
+    /** @see User::listingFavoritesRelation() */
+    const LISTING_FAVORITES_RELATION = 'listingFavoritesRelation';
 
     /**
      * Get the attributes that should be cast.
@@ -313,6 +322,44 @@ class User extends Authenticatable
             ];
         }
         return null;
+    }
+
+    public function imagesRelation(): MorphMany
+    {
+        return $this->morphMany(Image::class, 'imageable')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('created_at');
+    }
+
+    public function listingFavoritesRelation(): BelongsToMany
+    {
+        return $this->belongsToMany(Listing::class, 'listing_favorites')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return Collection<Image>
+     */
+    public function relatedImages(): Collection
+    {
+        return $this->{self::IMAGES_RELATION};
+    }
+
+    public function getProfileImage(): ?Image
+    {
+        return $this->relatedImages()
+            ->where('type', ImageTypeEnum::USER_AVATAR)
+            ->where('is_primary', true)
+            ->first() ??
+            $this->relatedImages()
+                ->where('type', ImageTypeEnum::USER_AVATAR)
+                ->first();
+    }
+
+    public function hasProfileImage(): bool
+    {
+        return $this->getProfileImage() !== null;
     }
 
     public static function newFactory(): UserFactory

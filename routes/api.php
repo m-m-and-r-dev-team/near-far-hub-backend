@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Locations\LocationController;
 use App\Http\Routes\Api\Auth\AuthRoutes;
+use App\Http\Routes\Api\Listings\ListingRoutes;
 use App\Http\Routes\Api\Profile\ProfileRoutes;
 use App\Http\Routes\Api\Roles\RoleRoutes;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ AuthRoutes::api();
 RoleRoutes::api();
 SellerRoutes::api();
 ProfileRoutes::api();
+ListingRoutes::api();
 
 Route::prefix('locations')->group(function () {
     Route::get('/suggestions', [LocationController::class, 'getSuggestions']);

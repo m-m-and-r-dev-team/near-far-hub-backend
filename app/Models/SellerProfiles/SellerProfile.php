@@ -70,6 +70,10 @@ class SellerProfile extends Model
     const APPOINTMENTS_RELATION = 'appointmentsRelation';
     /** @see SellerProfile::listingFeesRelation() */
     const LISTING_FEES_RELATION = 'listingFeesRelation';
+    /** @see SellerProfile::imagesRelation() */
+    const IMAGES_RELATION = 'imagesRelation';
+    /** @see SellerProfile::listingsRelation() */
+    const LISTINGS_RELATION = 'listingsRelation';
 
     public function userRelation(): BelongsTo
     {
@@ -181,5 +185,69 @@ class SellerProfile extends Model
     public function getListingFeeBalance(): float
     {
         return $this->getAttribute(self::LISTING_FEE_BALANCE);
+    }
+
+    public function imagesRelation(): MorphMany
+    {
+        return $this->morphMany(Image::class, 'imageable')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('created_at');
+    }
+
+    public function listingsRelation(): HasMany
+    {
+        return $this->hasMany(Listing::class, 'seller_profile_id');
+    }
+
+    /**
+     * @return Collection<Image>
+     */
+    public function relatedImages(): Collection
+    {
+        return $this->{self::IMAGES_RELATION};
+    }
+
+    /**
+     * @return Collection<Listing>
+     */
+    public function relatedListings(): Collection
+    {
+        return $this->{self::LISTINGS_RELATION};
+    }
+
+    public function getVerificationImages(): Collection
+    {
+        return $this->relatedImages()
+            ->where('type', \App\Enums\Images\ImageTypeEnum::SELLER_VERIFICATION);
+    }
+
+    public function getActiveListingsCount(): int
+    {
+        return $this->relatedListings()
+            ->where('status', \App\Enums\Listings\ListingStatusEnum::ACTIVE)
+            ->count();
+    }
+
+    public function getTotalListingsCount(): int
+    {
+        return $this->relatedListings()->count();
+    }
+
+    public function getSoldListingsCount(): int
+    {
+        return $this->relatedListings()
+            ->where('status', \App\Enums\Listings\ListingStatusEnum::SOLD)
+            ->count();
+    }
+
+    public function getTotalViews(): int
+    {
+        return $this->relatedListings()->sum('views_count');
+    }
+
+    public function getTotalFavorites(): int
+    {
+        return $this->relatedListings()->sum('favorites_count');
     }
 }
