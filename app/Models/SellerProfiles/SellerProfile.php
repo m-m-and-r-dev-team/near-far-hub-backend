@@ -8,12 +8,16 @@ use App\Models\ListingFees\ListingFee;
 use App\Models\SellerAppointments\SellerAppointment;
 use App\Models\SellerAvailabilities\SellerAvailability;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 
+/**
+ * @mixin Builder
+ */
 class SellerProfile extends Model
 {
     use HasFactory;

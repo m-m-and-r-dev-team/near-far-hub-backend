@@ -21,7 +21,7 @@ return new class extends Migration
             $table->decimal('weight', 8, 2)->nullable()->after('dimensions');
             $table->string('brand', 100)->nullable()->after('weight');
             $table->string('model', 100)->nullable()->after('brand');
-            $table->year('year')->nullable()->after('model');
+            $table->unsignedSmallInteger('year')->nullable()->after('model');
             $table->string('color', 50)->nullable()->after('year');
             $table->string('material', 100)->nullable()->after('color');
 

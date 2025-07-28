@@ -6,18 +6,24 @@ namespace App\Services\Repositories\Seller;
 
 use App\Models\SellerAvailabilities\SellerAvailability;
 use App\Models\SellerProfiles\SellerProfile;
+use App\Models\User;
 use App\Http\DataTransferObjects\Seller\CreateSellerProfileData;
 use App\Http\DataTransferObjects\Seller\UpdateSellerProfileData;
 use App\Http\DataTransferObjects\Seller\SetAvailabilityData;
+use App\Enums\Roles\RoleEnum;
+use App\Models\Roles\Role;
 use Exception;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 
 class SellerProfileRepository
 {
     public function __construct(
         private readonly SellerProfile $sellerProfile,
         private readonly SellerAvailability $sellerAvailability,
+        private readonly User $user,
+        private readonly Role $role,
     ) {
     }
 
@@ -30,31 +36,51 @@ class SellerProfileRepository
     }
 
     /**
+     * Create seller profile and upgrade user role atomically
      * @throws Exception
      */
     public function create(int $userId, CreateSellerProfileData $data): SellerProfile
     {
+        // Check if user already has a seller profile
         if ($this->getByUserId($userId)) {
             throw new Exception('User already has a seller profile');
         }
 
-        $payload = [
-            SellerProfile::USER_ID => $userId,
-            SellerProfile::BUSINESS_NAME => $data->businessName,
-            SellerProfile::BUSINESS_DESCRIPTION => $data->businessDescription,
-            SellerProfile::BUSINESS_TYPE => $data->businessType,
-            SellerProfile::PHONE => $data->phone,
-            SellerProfile::ADDRESS => $data->address,
-            SellerProfile::CITY => $data->city,
-            SellerProfile::POSTAL_CODE => $data->postalCode,
-            SellerProfile::COUNTRY => $data->country,
-            SellerProfile::IS_ACTIVE => true,
-            SellerProfile::IS_VERIFIED => false,
-        ];
+        // Get the user
+        $user = $this->user->findOrFail($userId);
 
-        $sellerProfile = $this->sellerProfile->create($payload);
+        return DB::transaction(function () use ($user, $data) {
+            // Step 1: Upgrade user role to seller if they're currently a buyer
+            if ($user->canUpgradeToSeller()) {
+                $sellerRole = $this->role->where(Role::NAME, RoleEnum::SELLER->value)->first();
 
-        return $sellerProfile->load([SellerProfile::USER_RELATION, SellerProfile::AVAILABILITY_RELATION]);
+                if (!$sellerRole) {
+                    throw new Exception('Seller role not found in system');
+                }
+
+                $user->update([User::ROLE_ID => $sellerRole->getId()]);
+                $user->load(User::ROLE_RELATION); // Reload the relationship
+            }
+
+            // Step 2: Create seller profile
+            $payload = [
+                SellerProfile::USER_ID => $user->getId(),
+                SellerProfile::BUSINESS_NAME => $data->businessName,
+                SellerProfile::BUSINESS_DESCRIPTION => $data->businessDescription,
+                SellerProfile::BUSINESS_TYPE => $data->businessType,
+                SellerProfile::PHONE => $data->phone,
+                SellerProfile::ADDRESS => $data->address,
+                SellerProfile::CITY => $data->city,
+                SellerProfile::POSTAL_CODE => $data->postalCode,
+                SellerProfile::COUNTRY => $data->country,
+                SellerProfile::IS_ACTIVE => true,
+                SellerProfile::IS_VERIFIED => false,
+            ];
+
+            $sellerProfile = $this->sellerProfile->create($payload);
+
+            return $sellerProfile->load([SellerProfile::USER_RELATION, SellerProfile::AVAILABILITY_RELATION]);
+        });
     }
 
     public function update(int $userId, UpdateSellerProfileData $data): SellerProfile
@@ -89,19 +115,24 @@ class SellerProfileRepository
             throw new ModelNotFoundException('Seller profile not found');
         }
 
-        $this->sellerAvailability
-            ->where(SellerAvailability::SELLER_PROFILE_ID, $sellerProfile->getId())
-            ->delete();
+        // Use transaction for availability updates
+        DB::transaction(function () use ($sellerProfile, $data) {
+            // Delete existing availability
+            $this->sellerAvailability
+                ->where(SellerAvailability::SELLER_PROFILE_ID, $sellerProfile->getId())
+                ->delete();
 
-        foreach ($data->availability as $slot) {
-            $this->sellerAvailability->create([
-                SellerAvailability::SELLER_PROFILE_ID => $sellerProfile->id,
-                SellerAvailability::DAY_OF_WEEK => $slot->dayOfWeek,
-                SellerAvailability::START_TIME => $slot->startTime,
-                SellerAvailability::END_TIME => $slot->endTime,
-                SellerAvailability::IS_ACTIVE => $slot->isActive,
-            ]);
-        }
+            // Create new availability slots
+            foreach ($data->availability as $slot) {
+                $this->sellerAvailability->create([
+                    SellerAvailability::SELLER_PROFILE_ID => $sellerProfile->getId(),
+                    SellerAvailability::DAY_OF_WEEK => $slot->dayOfWeek,
+                    SellerAvailability::START_TIME => $slot->startTime,
+                    SellerAvailability::END_TIME => $slot->endTime,
+                    SellerAvailability::IS_ACTIVE => $slot->isActive,
+                ]);
+            }
+        });
     }
 
     public function getAvailability(int $userId): Collection

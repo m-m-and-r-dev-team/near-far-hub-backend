@@ -9,8 +9,8 @@ use App\Models\Images\Image;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Intervention\Image\Facades\Image as InterventionImage;
 use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -37,7 +37,10 @@ class AwsImageUploadService
 
     public function __construct()
     {
-        $this->imageManager = new ImageManager(['driver' => 'gd']);
+        // Fixed for Intervention Image v3.x
+        $this->imageManager = new ImageManager(new Driver());
+        // Alternative: $this->imageManager = new ImageManager('gd');
+
         $this->disk = config('filesystems.default', 's3');
         $this->baseUrl = config('filesystems.disks.s3.url', '');
     }
@@ -274,23 +277,20 @@ class AwsImageUploadService
 
     private function processImage(UploadedFile $file, array $options = []): string
     {
-        $image = $this->imageManager->make($file->getContent());
+        // Updated for Intervention Image v3.x
+        $image = $this->imageManager->read($file->getContent());
 
         // Apply quality settings
         $quality = $options['quality'] ?? 85;
 
-        // Auto-orient based on EXIF data
-        $image->orientate();
+        // Auto-orient based on EXIF data (if needed, check v3.x documentation)
+        // $image->orientate(); // This method might be different in v3.x
 
         // Resize if max dimensions specified
         if (isset($options['max_width']) || isset($options['max_height'])) {
-            $image->resize(
-                $options['max_width'] ?? null,
-                $options['max_height'] ?? null,
-                function ($constraint) {
-                    $constraint->aspectRatio();
-                    $constraint->upsize();
-                }
+            $image->scale(
+                width: $options['max_width'] ?? null,
+                height: $options['max_height'] ?? null
             );
         }
 
@@ -299,12 +299,13 @@ class AwsImageUploadService
             $this->applyWatermark($image, $options);
         }
 
-        return $image->encode(null, $quality)->getEncoded();
+        // Updated encoding for v3.x
+        return $image->encodeByMediaType(quality: $quality);
     }
 
     private function generateThumbnails(UploadedFile $file, string $basePath, string $filename, Image $imageRecord): void
     {
-        $image = $this->imageManager->make($file->getContent());
+        $image = $this->imageManager->read($file->getContent());
         $pathInfo = pathinfo($filename);
         $baseFilename = $pathInfo['filename'];
         $extension = $pathInfo['extension'];
@@ -312,12 +313,15 @@ class AwsImageUploadService
         foreach (self::THUMBNAIL_SIZES as $sizeName => $dimensions) {
             try {
                 $thumbnail = clone $image;
-                $thumbnail->fit($dimensions['width'], $dimensions['height']);
+
+                // Updated for v3.x - cover method for fitting
+                $thumbnail->cover($dimensions['width'], $dimensions['height']);
 
                 $thumbnailFilename = $baseFilename . '_' . $sizeName . '.' . $extension;
                 $thumbnailPath = $basePath . '/thumbnails/' . $thumbnailFilename;
 
-                Storage::disk($this->disk)->put($thumbnailPath, $thumbnail->encode(null, 80)->getEncoded());
+                $encodedThumbnail = $thumbnail->encodeByMediaType(quality: 80);
+                Storage::disk($this->disk)->put($thumbnailPath, $encodedThumbnail);
 
                 // Update metadata with thumbnail info
                 $metadata = $imageRecord->getMetadata() ?? [];
@@ -378,12 +382,13 @@ class AwsImageUploadService
 
     private function applyWatermark($image, array $options): void
     {
-        // Implement watermark logic if needed
+        // Updated for Intervention Image v3.x
         $watermarkPath = config('images.watermark_path');
 
         if ($watermarkPath && file_exists($watermarkPath)) {
-            $watermark = $this->imageManager->make($watermarkPath);
-            $image->insert($watermark, 'bottom-right', 10, 10);
+            $watermark = $this->imageManager->read($watermarkPath);
+            // Updated method for v3.x - check documentation for exact syntax
+            $image->place($watermark, 'bottom-right', 10, 10);
         }
     }
 

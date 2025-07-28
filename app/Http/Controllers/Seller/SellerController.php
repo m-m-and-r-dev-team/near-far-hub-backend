@@ -10,10 +10,10 @@ use App\Http\Requests\Seller\UpdateSellerProfileRequest;
 use App\Http\Requests\Seller\SetAvailabilityRequest;
 use App\Http\Resources\Seller\SellerProfileResource;
 use App\Http\Resources\Seller\SellerAvailabilityResource;
+use App\Http\Resources\Users\UserResource;
 use App\Services\Repositories\Seller\SellerProfileRepository;
 use Exception;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Auth\AuthenticationException;
 use Spatie\DataTransferObject\Exceptions\UnknownProperties;
 
 class SellerController extends Controller
@@ -41,18 +41,28 @@ class SellerController extends Controller
     }
 
     /**
-     * Create seller profile
+     * Create seller profile and upgrade user role
      * @throws UnknownProperties
      * @throws Exception
      */
-    public function createProfile(CreateSellerProfileRequest $request): SellerProfileResource
+    public function createProfile(CreateSellerProfileRequest $request): JsonResponse
     {
         $sellerProfile = $this->sellerProfileRepository->create(
             auth()->id(),
             $request->dto()
         );
 
-        return new SellerProfileResource($sellerProfile);
+        $user = auth()->user();
+        $user->load('roleRelation');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Seller profile created and role upgraded successfully!',
+            'data' => [
+                'sellerProfile' => new SellerProfileResource($sellerProfile),
+                'user' => new UserResource($user),
+            ]
+        ], 201);
     }
 
     /**
@@ -81,6 +91,7 @@ class SellerController extends Controller
         );
 
         return response()->json([
+            'success' => true,
             'message' => 'Availability updated successfully'
         ]);
     }
@@ -93,6 +104,7 @@ class SellerController extends Controller
         $availability = $this->sellerProfileRepository->getAvailability(auth()->id());
 
         return response()->json([
+            'success' => true,
             'data' => SellerAvailabilityResource::collection($availability)
         ]);
     }
@@ -105,6 +117,7 @@ class SellerController extends Controller
         $stats = $this->sellerProfileRepository->getDashboardStats(auth()->id());
 
         return response()->json([
+            'success' => true,
             'data' => $stats
         ]);
     }
@@ -117,6 +130,7 @@ class SellerController extends Controller
         $this->sellerProfileRepository->deactivateAccount(auth()->id());
 
         return response()->json([
+            'success' => true,
             'message' => 'Seller account deactivated successfully'
         ]);
     }

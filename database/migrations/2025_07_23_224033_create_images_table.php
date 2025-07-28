@@ -12,7 +12,7 @@ return new class extends Migration
     {
         Schema::create('images', function (Blueprint $table) {
             $table->id();
-            $table->morphs('imageable'); // Creates imageable_type and imageable_id columns
+            $table->morphs('imageable'); // Creates imageable_type and imageable_id columns AND their index automatically
             $table->enum('type', [
                 'profile',
                 'listing',
@@ -36,8 +36,7 @@ return new class extends Migration
             $table->json('metadata')->nullable(); // Store thumbnails, upload info, etc.
             $table->timestamps();
 
-            // Indexes for performance
-            $table->index(['imageable_type', 'imageable_id']);
+            // Indexes for performance (removed the duplicate morphs index)
             $table->index(['type', 'is_active']);
             $table->index(['is_primary', 'sort_order']);
             $table->index('sort_order');

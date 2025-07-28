@@ -17,7 +17,8 @@ class RoleRoutes implements RouteContract
             Route::get('/current', [RoleController::class, 'getCurrentUserRole']);
             Route::get('/permissions', [RoleController::class, 'permissions']);
             Route::get('/can-upgrade-to-seller', [RoleController::class, 'canUpgradeToSeller']);
-            Route::post('/upgrade-to-seller', [RoleController::class, 'upgradeToSeller']);
+            Route::post('/upgrade-to-seller', [RoleController::class, 'upgradeToSeller'])
+                ->middleware('role:buyer');
         });
     }
 }
