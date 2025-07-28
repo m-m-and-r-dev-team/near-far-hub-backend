@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Traits\Resources;
 
+use BackedEnum;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -18,6 +19,8 @@ trait HasConditionalFields
 
             if ($value instanceof Carbon) {
                 $data[$key] = $value->toISOString();
+            } elseif ($value instanceof BackedEnum) {
+                $data[$key] = $value->value;
             } elseif (is_bool($value)) {
                 $data[$key] = $value;
             } elseif (is_null($value)) {
