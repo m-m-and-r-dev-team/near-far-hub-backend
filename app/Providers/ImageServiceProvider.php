@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Services\Images\AwsImageUploadService;
+use App\Services\Images\ImageUploadService;
 use Illuminate\Support\ServiceProvider;
 
 class ImageServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(AwsImageUploadService::class, function ($app) {
-            return new AwsImageUploadService();
+        $this->app->singleton(ImageUploadService::class, function ($app) {
+            return new ImageUploadService();
         });
     }
 

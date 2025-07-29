@@ -15,7 +15,7 @@ use App\Http\Resources\Images\ImageResource;
 use App\Http\Resources\Listings\ListingCardResource;
 use App\Http\Resources\Listings\ListingResource;
 use App\Http\Resources\Listings\ListingSearchResource;
-use App\Services\Images\AwsImageUploadService;
+use App\Services\Images\ImageUploadService;
 use App\Services\Repositories\Listings\ListingRepository;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -27,7 +27,7 @@ class ListingController extends Controller
 {
     public function __construct(
         private readonly ListingRepository $listingRepository,
-        private readonly AwsImageUploadService $imageUploadService
+        private readonly ImageUploadService $imageUploadService
     ) {
     }
 
