@@ -26,9 +26,10 @@ use Spatie\DataTransferObject\Exceptions\UnknownProperties;
 class ListingController extends Controller
 {
     public function __construct(
-        private readonly ListingRepository $listingRepository,
+        private readonly ListingRepository  $listingRepository,
         private readonly ImageUploadService $imageUploadService
-    ) {
+    )
+    {
     }
 
     /**
@@ -48,8 +49,8 @@ class ListingController extends Controller
     public function getSellerListings(Request $request): AnonymousResourceCollection
     {
         $status = $request->get('status') ? ListingStatusEnum::from($request->get('status')) : null;
-        $page = (int) $request->get('page', 1);
-        $perPage = (int) $request->get('per_page', 20);
+        $page = (int)$request->get('page', 1);
+        $perPage = (int)$request->get('per_page', 20);
 
         $listings = $this->listingRepository->getBySellerUserId(
             auth()->id(),
@@ -168,7 +169,6 @@ class ListingController extends Controller
     {
         $listing = $this->listingRepository->findByIdAndUserId($listingId, auth()->id());
 
-        $uploadedImages = [];
         $files = $request->file('images');
 
         $options = [
@@ -177,32 +177,22 @@ class ListingController extends Controller
             'max_width' => $request->input('max_width', 1200),
             'max_height' => $request->input('max_height', 900),
             'generate_thumbnails' => true,
-            'auto_set_primary' => $listing->relatedImages()->isEmpty(),
+            'auto_set_primary' => !$listing->hasImages(),
         ];
 
-        try {
-            $uploadedImages = $this->imageUploadService->uploadMultipleForModel(
-                $files,
-                $listing,
-                ImageTypeEnum::LISTING,
-                $options
-            );
+        $uploadedImages = $this->imageUploadService->uploadMultipleForModel(
+            $files,
+            $listing,
+            ImageTypeEnum::LISTING,
+            $options
+        );
 
-            return response()->json([
-                'message' => 'Images uploaded successfully',
-                'images' => ImageResource::collection($uploadedImages),
-                'uploaded_count' => count($uploadedImages),
-                'total_images' => $listing->relatedImages()->count()
-            ]);
-
-        } catch (Exception $e) {
-            return response()->json([
-                'message' => 'Some images failed to upload',
-                'error' => $e->getMessage(),
-                'uploaded_images' => ImageResource::collection($uploadedImages),
-                'uploaded_count' => count($uploadedImages)
-            ], 422);
-        }
+        return response()->json([
+            'message' => 'Images uploaded successfully',
+            'images' => ImageResource::collection($uploadedImages),
+            'uploaded_count' => $uploadedImages->count(),
+            'total_images' => $listing->getImageCount()
+        ]);
     }
 
     /**
@@ -212,8 +202,7 @@ class ListingController extends Controller
     public function updateImage(int $listingId, int $imageId, Request $request): JsonResponse
     {
         $listing = $this->listingRepository->findByIdAndUserId($listingId, auth()->id());
-
-        $image = $listing->relatedImages()->findOrFail($imageId);
+        $image = $listing->imagesRelation()->findOrFail($imageId);
 
         $updatedImage = $this->imageUploadService->updateImage($image, [
             'alt_text' => $request->input('alt_text'),
@@ -285,7 +274,7 @@ class ListingController extends Controller
      */
     public function getPopularListings(Request $request): AnonymousResourceCollection
     {
-        $limit = min((int) $request->get('limit', 10), 50);
+        $limit = min((int)$request->get('limit', 10), 50);
         $popularListings = $this->listingRepository->getPopularListings($limit);
         return ListingCardResource::collection($popularListings);
     }
@@ -295,7 +284,7 @@ class ListingController extends Controller
      */
     public function getRecentListings(Request $request): AnonymousResourceCollection
     {
-        $limit = min((int) $request->get('limit', 10), 50);
+        $limit = min((int)$request->get('limit', 10), 50);
         $recentListings = $this->listingRepository->getRecentListings($limit);
         return ListingCardResource::collection($recentListings);
     }
@@ -322,7 +311,7 @@ class ListingController extends Controller
         foreach (\App\Enums\Listings\ListingCategoryEnum::cases() as $category) {
             $categories[] = [
                 'value' => $category->value,
-                'label' => match($category) {
+                'label' => match ($category) {
                     \App\Enums\Listings\ListingCategoryEnum::ELECTRONICS => 'Electronics',
                     \App\Enums\Listings\ListingCategoryEnum::FASHION => 'Fashion',
                     \App\Enums\Listings\ListingCategoryEnum::HOME_GARDEN => 'Home & Garden',
@@ -355,7 +344,7 @@ class ListingController extends Controller
         foreach (\App\Enums\Listings\ListingConditionEnum::cases() as $condition) {
             $conditions[] = [
                 'value' => $condition->value,
-                'label' => match($condition) {
+                'label' => match ($condition) {
                     \App\Enums\Listings\ListingConditionEnum::NEW => 'New',
                     \App\Enums\Listings\ListingConditionEnum::LIKE_NEW => 'Like New',
                     \App\Enums\Listings\ListingConditionEnum::GOOD => 'Good',

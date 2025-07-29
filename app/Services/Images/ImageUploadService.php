@@ -4,142 +4,257 @@ declare(strict_types=1);
 
 namespace App\Services\Images;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Images\DeleteImageRequest;
-use App\Http\Requests\Images\GetImagesRequest;
-use App\Http\Requests\Images\SetPrimaryImageRequest;
-use App\Http\Requests\Images\UploadImagesRequest;
-use App\Http\Resources\Images\ImageResource;
-use App\Http\Resources\Images\ImageResourceCollection;
+use App\Enums\Images\ImageTypeEnum;
 use App\Models\Images\Image;
-use Illuminate\Contracts\Filesystem\FileNotFoundException;
-use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Http\JsonResponse;
+use Exception;
+use Illuminate\Support\Collection as IlluminateSupportCollection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
 
-class ImageUploadService extends Controller
+class ImageUploadService
 {
-    public function __construct(
-        private readonly Image $image,
-        private readonly Storage $storage
-    )
-    {
-    }
-    public function getImages(GetImagesRequest $request): ImageResourceCollection
-    {
-        $id = $request->getRelatedId();
+    private ImageManager $imageManager;
 
-        $images = $this->image->where(Image::RELATED_ID, $id)
-            ->where(Image::TYPE, $request->getType())
-            ->orderBy(Image::IS_PRIMARY, 'desc')
-            ->get();
-
-        return new ImageResourceCollection($images);
+    public function __construct()
+    {
+        $this->imageManager = new ImageManager(new Driver());
     }
 
-    public function uploadImages(UploadImagesRequest $request): ImageResourceCollection
+    /**
+     * Upload multiple images for a model
+     * @param UploadedFile[] $files
+     * @param Model $model
+     * @param ImageTypeEnum $type
+     * @param array $options
+     * @return IlluminateSupportCollection
+     * @throws Exception
+     */
+    public function uploadMultipleForModel(
+        array         $files,
+        Model         $model,
+        ImageTypeEnum $type,
+        array         $options = []
+    ): IlluminateSupportCollection
     {
-        $id = $request->getRelatedId();
-        $newImages = [];
+        $uploadedImages = collect();
+        $isPrimaryRequired = $options['auto_set_primary'] ?? !$model->imagesRelation()->where(Image::IS_PRIMARY, true)->exists();
 
-        $isPrimaryRequired = !$this->image->where(Image::RELATED_ID, $id)
-            ->where(Image::TYPE, $request->getType())
-            ->where(Image::IS_PRIMARY, true)
-            ->exists();
+        foreach ($files as $index => $file) {
+            $image = $this->uploadSingleForModel($file, $model, $type, array_merge($options, [
+                Image::IS_PRIMARY => $isPrimaryRequired && $index === 0,
+                'sort_order' => $options['sort_order'] ?? ($model->imagesRelation()->count() + $index),
+            ]));
 
-        foreach ($request->getImages() as $index => $image) {
-            $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
-            $path = $request->getType() . '/' . $filename;
-
-            $this->storage->disk('s3')->put($path, $image->get());
-
-            $isPrimary = $isPrimaryRequired && $index === 0;
-
-            $imageModel = $this->image->create([
-                Image::RELATED_ID => $id,
-                Image::TYPE => $request->getType(),
-                Image::IMAGE_LINK => $filename,
-                Image::IS_PRIMARY => $isPrimary
-            ]);
-
-            $newImages[] = $imageModel;
+            $uploadedImages->push($image);
         }
 
-        return new ImageResourceCollection(collect($newImages));
+        return $uploadedImages;
     }
 
-    public function setPrimaryImage(SetPrimaryImageRequest $request): ImageResource
+    /**
+     * Upload a single image for a model
+     * @throws Exception
+     */
+    public function uploadSingleForModel(
+        UploadedFile  $file,
+        Model         $model,
+        ImageTypeEnum $type,
+        array         $options = []
+    ): Image
     {
-        $imageId = $request->getImageId();
+        $this->validateImage($file);
 
-        /** @var Image $image */
-        $image = $this->image->findOrFail($imageId);
+        $filename = $this->generateFilename($file);
+        $path = $type->value . '/' . $filename;
 
-        $this->image->where(Image::RELATED_ID, $image->getRelatedId())
-            ->where(Image::TYPE, $image->getType())
-            ->update([Image::IS_PRIMARY => false]);
+        $processedImage = $this->processImage($file, $options);
 
-        $image->update([Image::IS_PRIMARY => true]);
+        Storage::disk('s3')->put($path, $processedImage['content']);
 
-        return new ImageResource($image);
+        $metadata = [];
+        if ($options['generate_thumbnails'] ?? false) {
+            $metadata['thumbnails'] = $this->generateThumbnails($file, $type, $filename, $options);
+        }
+
+        return $model->imagesRelation()->create([
+            Image::IMAGE_LINK => $filename,
+            Image::TYPE => $type->value,
+            Image::ALT_TEXT => $options['alt_text'] ?? null,
+            Image::SORT_ORDER => $options['sort_order'] ?? 0,
+            Image::IS_PRIMARY => $options['is_primary'] ?? false,
+            Image::IS_ACTIVE => $options['is_active'] ?? true,
+            Image::METADATA => $metadata,
+            Image::WIDTH => $processedImage['width'],
+            Image::HEIGHT => $processedImage['height'],
+            Image::FILE_SIZE => $processedImage['file_size'],
+        ]);
     }
 
-    public function deleteImage(DeleteImageRequest $request): JsonResponse
+    /**
+     * Update image details
+     */
+    public function updateImage(Image $image, array $data): Image
     {
-        $imageId = $request->getImageId();
+        $updateData = array_filter([
+            Image::ALT_TEXT => $data['alt_text'] ?? null,
+            Image::SORT_ORDER => $data['sort_order'] ?? null,
+            Image::IS_ACTIVE => $data['is_active'] ?? null,
+        ], fn($value) => $value !== null);
 
-        /** @var Image $image */
-        $image = $this->image->findOrFail($imageId);
-        $relatedId = $image->getRelatedId();
-        $isPrimary = $image->getIsPrimary();
+        if (isset($data['is_primary']) && $data['is_primary']) {
+            $image->imageable->imagesRelation()
+                ->where('type', $image->getType())
+                ->where('id', '!=', $image->getId())
+                ->update([Image::IS_PRIMARY => false]);
 
-        $path = $image->getType() . '/' . $image->getImageLink();
-        $this->storage->disk('s3')->delete($path);
+            $updateData[Image::IS_PRIMARY] = true;
+        }
 
-        $image->delete();
+        $image->update($updateData);
+        return $image->fresh();
+    }
 
-        if ($isPrimary) {
-            $nextImage = $this->image->where(Image::RELATED_ID, $relatedId)
-                ->where(Image::TYPE, $image->getType())
+    /**
+     * Delete an image
+     */
+    public function deleteImage(Image $image): bool
+    {
+        $path = $image->getFullPath();
+        Storage::disk('s3')->delete($path);
+
+        $metadata = $image->getMetadata();
+        if (isset($metadata['thumbnails'])) {
+            foreach ($metadata['thumbnails'] as $thumbnail) {
+                if (isset($thumbnail['path'])) {
+                    Storage::disk('s3')->delete($thumbnail['path']);
+                }
+            }
+        }
+
+        if ($image->getIsPrimary()) {
+            $nextImage = $image->imageable->imagesRelation()
+                ->where('type', $image->getType())
+                ->where('id', '!=', $image->getId())
+                ->orderBy('sort_order')
                 ->first();
+
             if ($nextImage) {
                 $nextImage->update([Image::IS_PRIMARY => true]);
             }
         }
 
-        return response()->json([
-            'message' => 'Image deleted successfully'
-        ], 204);
+        $image->delete();
+
+        return true;
     }
 
     /**
-     * @throws FileNotFoundException
+     * Reorder images
      */
-    public function handleSingleImageUpload(int $relatedId, UploadedFile $imageFile, string $type): void
+    public function reorderImages(Model $model, array $imageIds): void
     {
-        /** @var Collection<Image> $existingImages */
-        $existingImages = $this->image->where(Image::RELATED_ID, $relatedId)
-            ->where(Image::TYPE, $type)
-            ->get();
+        foreach ($imageIds as $index => $imageId) {
+            $model->imagesRelation()
+                ->where('id', $imageId)
+                ->update([Image::SORT_ORDER => $index]);
+        }
+    }
 
-        foreach ($existingImages as $image) {
-            $path = $type . '/' . $image->getImageLink();
-            $this->storage->disk('s3')->delete($path);
-            $image->delete();
+    /**
+     * Set primary image
+     */
+    public function setPrimaryImage(Image $image): Image
+    {
+        $image->imageable->imagesRelation()
+            ->where('type', $image->getType())
+            ->where('id', '!=', $image->getId())
+            ->update([Image::IS_PRIMARY => false]);
+
+        $image->update([Image::IS_PRIMARY => true]);
+
+        return $image->fresh();
+    }
+
+    /**
+     * @throws Exception
+     */
+    private function validateImage(UploadedFile $file): void
+    {
+        $maxSize = 10 * 1024 * 1024; // 10MB
+        $allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+
+        if ($file->getSize() > $maxSize) {
+            throw new Exception('Image file size cannot exceed 10MB');
         }
 
-        $filename = Str::uuid() . '.' . $imageFile->getClientOriginalExtension();
-        $path = $type . '/' . $filename;
+        if (!in_array($file->getMimeType(), $allowedMimes)) {
+            throw new Exception('Invalid image format. Only JPEG, PNG, GIF, and WebP are allowed');
+        }
+    }
 
-        Storage::disk('s3')->put($path, $imageFile->get());
+    private function generateFilename(UploadedFile $file): string
+    {
+        return Str::uuid() . '.' . $file->getClientOriginalExtension();
+    }
 
-        $this->image->create([
-            Image::RELATED_ID => $relatedId,
-            Image::TYPE => $type,
-            Image::IMAGE_LINK => $filename,
-            Image::IS_PRIMARY => true
-        ]);
+    private function processImage(UploadedFile $file, array $options): array
+    {
+        $quality = $options['quality'] ?? 85;
+        $maxWidth = $options['max_width'] ?? 1200;
+        $maxHeight = $options['max_height'] ?? 900;
+
+        $image = $this->imageManager->read($file->getPathname());
+
+        if ($image->width() > $maxWidth || $image->height() > $maxHeight) {
+            $image->scaleDown($maxWidth, $maxHeight);
+        }
+
+        $encoded = $image->toJpeg($quality);
+
+        return [
+            'content' => (string)$encoded,
+            'width' => $image->width(),
+            'height' => $image->height(),
+            'file_size' => strlen((string)$encoded),
+        ];
+    }
+
+    private function generateThumbnails(UploadedFile $file, ImageTypeEnum $type, string $filename, array $options): array
+    {
+        $thumbnails = [];
+        $sizes = [
+            'small' => ['width' => 150, 'height' => 150],
+            'medium' => ['width' => 300, 'height' => 300],
+            'large' => ['width' => 600, 'height' => 600],
+        ];
+
+        $image = $this->imageManager->read($file->getPathname());
+        $baseName = pathinfo($filename, PATHINFO_FILENAME);
+        $extension = pathinfo($filename, PATHINFO_EXTENSION);
+
+        foreach ($sizes as $sizeName => $dimensions) {
+            $thumbnailFilename = $baseName . '_' . $sizeName . '.' . $extension;
+            $thumbnailPath = $type->value . '/thumbnails/' . $thumbnailFilename;
+
+            $thumbnail = clone $image;
+            $thumbnail->scaleDown($dimensions['width'], $dimensions['height']);
+            $encoded = $thumbnail->toJpeg(80);
+
+            Storage::disk('s3')->put($thumbnailPath, (string)$encoded);
+
+            $thumbnails[$sizeName] = [
+                'filename' => $thumbnailFilename,
+                'path' => $thumbnailPath,
+                'url' => Storage::disk('s3')->url($thumbnailPath),
+                'width' => $thumbnail->width(),
+                'height' => $thumbnail->height(),
+            ];
+        }
+
+        return $thumbnails;
     }
 }

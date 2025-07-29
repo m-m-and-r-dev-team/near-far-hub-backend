@@ -5,30 +5,35 @@ declare(strict_types=1);
 namespace App\Http\Resources\Images;
 
 use App\Models\Images\Image;
-use App\Services\Traits\Resources\HasConditionalFields;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class ImageResource extends JsonResource
 {
-    use HasConditionalFields;
-
     /**
      * @var Image $resource
      */
     public $resource;
 
-    protected array $conditionalFields = [
-        'isPrimary' => Image::IS_PRIMARY,
-        'createdAt' => Image::CREATED_AT,
-    ];
-
     public function toArray($request): array
     {
         return [
             'id' => $this->resource->getId(),
-            'relatedId' => $this->resource->getRelatedId(),
-            'imageUrl' => Storage::disk('s3')->url($this->resource->getType() . '/' . $this->resource->getImageLink()),
+            'type' => $this->resource->getType(),
+            'altText' => $this->resource->getAltText(),
+            'sortOrder' => $this->resource->getSortOrder(),
+            'isPrimary' => $this->resource->getIsPrimary(),
+            'isActive' => $this->resource->getIsActive(),
+            'width' => $this->resource->getWidth(),
+            'height' => $this->resource->getHeight(),
+            'fileSize' => $this->resource->getFileSize(),
+            'formattedFileSize' => $this->resource->getFormattedFileSize(),
+            'url' => $this->resource->getUrl(),
+            'thumbnails' => $this->when(
+                !empty($this->resource->getMetadata()['thumbnails']),
+                $this->resource->getMetadata()['thumbnails'] ?? []
+            ),
+            'metadata' => $this->resource->getMetadata(),
+            'createdAt' => $this->resource->getCreatedAt()->toISOString(),
         ];
     }
 }

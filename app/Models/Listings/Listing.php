@@ -119,9 +119,9 @@ class Listing extends Model
     public function imagesRelation(): MorphMany
     {
         return $this->morphMany(Image::class, 'imageable')
-            ->where('is_active', true)
+            ->where(Image::IS_ACTIVE, true)
             ->orderBy('sort_order')
-            ->orderBy('created_at');
+            ->orderBy(Image::CREATED_AT);
     }
 
     public function appointmentsRelation(): HasMany
@@ -290,8 +290,8 @@ class Listing extends Model
 
     public function getPrimaryImage(): ?Image
     {
-        return $this->relatedImages()->where('is_primary', true)->first() ??
-            $this->relatedImages()->first();
+        return $this->imagesRelation()->where(Image::IS_PRIMARY, true)->first() ??
+            $this->imagesRelation()->first();
     }
 
     public function getFormattedPrice(): string
@@ -371,6 +371,34 @@ class Listing extends Model
     public function scopeViewable($query)
     {
         return $query->active()->published()->notExpired();
+    }
+
+    public function hasImages(): bool
+    {
+        return $this->imagesRelation()->exists();
+    }
+
+    public function getImageCount(): int
+    {
+        return $this->imagesRelation()->count();
+    }
+
+    public function addImage(string $filename, string $type, array $options = []): Image
+    {
+        $isPrimary = $options['is_primary'] ?? !$this->hasImages();
+
+        return $this->imagesRelation()->create([
+            Image::IMAGE_LINK => $filename,
+            Image::TYPE => $type,
+            Image::ALT_TEXT => $options['alt_text'] ?? null,
+            Image::SORT_ORDER => $options['sort_order'] ?? $this->getImageCount(),
+            Image::IS_PRIMARY => $isPrimary,
+            Image::IS_ACTIVE => $options['is_active'] ?? true,
+            Image::METADATA => $options['metadata'] ?? null,
+            Image::WIDTH => $options['width'] ?? null,
+            Image::HEIGHT => $options['height'] ?? null,
+            Image::FILE_SIZE => $options['file_size'] ?? null,
+        ]);
     }
 
     public function scopeByCategory($query, ListingCategoryEnum $category)
