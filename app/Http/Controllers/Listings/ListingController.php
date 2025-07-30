@@ -170,29 +170,73 @@ class ListingController extends Controller
         $listing = $this->listingRepository->findByIdAndUserId($listingId, auth()->id());
 
         $files = $request->file('images');
+        if (!$files || empty($files)) {
+            return response()->json([
+                'message' => 'No images provided'
+            ], 400);
+        }
 
         $options = [
             'alt_text' => $request->input('alt_text'),
-            'quality' => $request->input('quality', 85),
-            'max_width' => $request->input('max_width', 1200),
-            'max_height' => $request->input('max_height', 900),
+            'quality' => (int) $request->input('quality', 85),
+            'max_width' => (int) $request->input('max_width', 1200),
+            'max_height' => (int) $request->input('max_height', 900),
             'generate_thumbnails' => true,
-            'auto_set_primary' => !$listing->hasImages(),
+            'auto_set_primary' => !$listing->hasPrimaryImage(),
         ];
 
-        $uploadedImages = $this->imageUploadService->uploadMultipleForModel(
-            $files,
-            $listing,
-            ImageTypeEnum::LISTING,
-            $options
-        );
+        $uploadedImages = collect();
+        $errors = [];
+        $successCount = 0;
 
-        return response()->json([
-            'message' => 'Images uploaded successfully',
-            'images' => ImageResource::collection($uploadedImages),
-            'uploaded_count' => $uploadedImages->count(),
-            'total_images' => $listing->getImageCount()
-        ]);
+        foreach ($files as $index => $file) {
+            try {
+                $uploadedImage = $this->imageUploadService->uploadSingleForModel(
+                    $file,
+                    $listing,
+                    ImageTypeEnum::LISTING,
+                    array_merge($options, [
+                        'sort_order' => $listing->getImageCount() + $index,
+                        'is_primary' => $options['auto_set_primary'] && $successCount === 0,
+                    ])
+                );
+
+                $uploadedImages->push($uploadedImage);
+                $successCount++;
+            } catch (Exception $e) {
+                $errors[] = [
+                    'file' => $file->getClientOriginalName(),
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        $responseData = [
+            'uploaded_count' => $successCount,
+            'total_attempted' => count($files),
+            'total_images' => $listing->fresh()->getImageCount(),
+        ];
+
+        if ($uploadedImages->isNotEmpty()) {
+            $responseData['images'] = ImageResource::collection($uploadedImages);
+        }
+
+        if (!empty($errors)) {
+            $responseData['errors'] = $errors;
+        }
+
+        $statusCode = 200;
+        if ($successCount === 0) {
+            $responseData['message'] = 'No images were uploaded successfully';
+            $statusCode = 400;
+        } elseif (!empty($errors)) {
+            $responseData['message'] = "Successfully uploaded {$successCount} of " . count($files) . " images";
+            $statusCode = 207;
+        } else {
+            $responseData['message'] = 'All images uploaded successfully!';
+        }
+
+        return response()->json($responseData, $statusCode);
     }
 
     /**
@@ -202,19 +246,33 @@ class ListingController extends Controller
     public function updateImage(int $listingId, int $imageId, Request $request): JsonResponse
     {
         $listing = $this->listingRepository->findByIdAndUserId($listingId, auth()->id());
+
         $image = $listing->imagesRelation()->findOrFail($imageId);
 
-        $updatedImage = $this->imageUploadService->updateImage($image, [
-            'alt_text' => $request->input('alt_text'),
-            'sort_order' => $request->input('sort_order'),
-            'is_primary' => $request->boolean('is_primary'),
-            'is_active' => $request->boolean('is_active', true),
+        $request->validate([
+            'alt_text' => 'sometimes|string|max:255',
+            'sort_order' => 'sometimes|integer|min:0',
+            'is_primary' => 'sometimes|boolean',
+            'is_active' => 'sometimes|boolean',
         ]);
 
-        return response()->json([
-            'message' => 'Image updated successfully',
-            'image' => new ImageResource($updatedImage)
-        ]);
+        try {
+            $updatedImage = $this->imageUploadService->updateImage($image, [
+                'alt_text' => $request->input('alt_text'),
+                'sort_order' => $request->input('sort_order'),
+                'is_primary' => $request->boolean('is_primary'),
+                'is_active' => $request->boolean('is_active', true),
+            ]);
+
+            return response()->json([
+                'message' => 'Image updated successfully',
+                'image' => new ImageResource($updatedImage)
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => 'Failed to update image: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -225,19 +283,26 @@ class ListingController extends Controller
     {
         $listing = $this->listingRepository->findByIdAndUserId($listingId, auth()->id());
 
-        $image = $listing->relatedImages()->findOrFail($imageId);
+        $image = $listing->imagesRelation()->findOrFail($imageId);
 
-        $deleted = $this->imageUploadService->deleteImage($image);
+        try {
+            $deleted = $this->imageUploadService->deleteImage($image);
 
-        if ($deleted) {
+            if ($deleted) {
+                return response()->json([
+                    'message' => 'Image deleted successfully',
+                    'remaining_images' => $listing->fresh()->getImageCount()
+                ]);
+            }
+
             return response()->json([
-                'message' => 'Image deleted successfully'
-            ]);
+                'message' => 'Failed to delete image from storage'
+            ], 500);
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => 'Failed to delete image: ' . $e->getMessage()
+            ], 500);
         }
-
-        return response()->json([
-            'message' => 'Failed to delete image'
-        ], 500);
     }
 
     /**
@@ -249,15 +314,33 @@ class ListingController extends Controller
         $listing = $this->listingRepository->findByIdAndUserId($listingId, auth()->id());
 
         $request->validate([
-            'image_ids' => 'required|array',
+            'image_ids' => 'required|array|min:1',
             'image_ids.*' => 'integer|exists:images,id'
         ]);
 
-        $this->imageUploadService->reorderImages($listing, $request->input('image_ids'));
+        $imageIds = $request->input('image_ids');
 
-        return response()->json([
-            'message' => 'Images reordered successfully'
-        ]);
+        $listingImageIds = $listing->imagesRelation()->pluck('id')->toArray();
+        $invalidIds = array_diff($imageIds, $listingImageIds);
+
+        if (!empty($invalidIds)) {
+            return response()->json([
+                'message' => 'Some images do not belong to this listing',
+                'invalid_ids' => $invalidIds
+            ], 400);
+        }
+
+        try {
+            $this->imageUploadService->reorderImages($listing, $imageIds);
+
+            return response()->json([
+                'message' => 'Images reordered successfully'
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => 'Failed to reorder images: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

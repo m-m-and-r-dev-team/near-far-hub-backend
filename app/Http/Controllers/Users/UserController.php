@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Users;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Users\UpdateProfileRequest;
 use App\Http\Resources\Users\UserResource;
+use App\Models\User;
 use App\Services\Repositories\Users\UserLogicRepository;
 use Exception;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +27,13 @@ class UserController extends Controller
     public function getProfile(): UserResource
     {
         $user = $this->userLogicRepository->getUserProfile(auth()->id());
+
+        $user->load([
+            User::ROLE_RELATION,
+            User::SELLER_PROFILE_RELATION,
+            User::IMAGES_RELATION
+        ]);
+
         return new UserResource($user);
     }
 
