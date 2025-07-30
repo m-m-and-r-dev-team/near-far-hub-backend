@@ -34,6 +34,12 @@ return new class extends Migration
             $table->string('meta_title')->nullable()->after('contact_count');
             $table->text('meta_description')->nullable()->after('meta_title');
 
+            if (Schema::hasTable('categories')) {
+                $table->foreignId('category_id')->after('seller_profile_id')->constrained('categories')->onDelete('cascade');
+            } else {
+                $table->unsignedBigInteger('category_id')->after('seller_profile_id');
+            }
+
             $table->foreign('category_id')->references('id')->on('categories')->onDelete('cascade');
 
             $table->index(['status', 'published_at']);
