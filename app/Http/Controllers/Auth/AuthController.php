@@ -24,16 +24,6 @@ class AuthController extends Controller
 
     /**
      * @throws UnknownProperties
-     */
-    public function register(RegisterRequest $request): AuthResource
-    {
-        return $request->responseResource(
-            $this->authLogicRepository->register($request->dto())
-        );
-    }
-
-    /**
-     * @throws UnknownProperties
      * @throws ValidationException
      */
     public function login(LoginRequest $request): AuthResource
